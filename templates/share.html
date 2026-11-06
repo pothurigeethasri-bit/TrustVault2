@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Share - TrustVault{% endblock %}
+{% block content %}
+<a href="{{ url_for('owner') }}" class="small">&larr; Back to my documents</a>
+<div class="page-head mt-2 d-flex align-items-center gap-3">
+  <span class="ft ft-{{ doc.mime_type | filetype }}">{{ doc.mime_type | filetype | upper }}</span>
+  <div><h1 class="h3 mb-0">{{ doc.original_name }}</h1><div class="text-muted small">Control who can open this document</div></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <form method="post" action="{{ url_for('permissions.grant', doc_id=doc.id) }}" class="tv-card tv-card-body h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="card-title-sm">{{ icon('key', 18) }} Give access</div>
+      <label class="form-label" for="user_id">User</label>
+      <select class="form-select mb-3" id="user_id" name="user_id" required>
+        <option value="">Choose a user</option>
+        {% for u in candidates %}<option value="{{ u.id }}">{{ u.username }} ({{ u.role }})</option>{% endfor %}
+      </select>
+      <label class="form-label" for="access_level">Permission</label>
+      <select class="form-select mb-3" id="access_level" name="access_level">
+        <option value="read">Read: view and download</option>
+        <option value="edit">Edit: also rename and replace (Owners only)</option>
+      </select>
+      <button class="btn btn-tv" type="submit">Grant access</button>
+    </form>
+  </div>
+  <div class="col-lg-7">
+    <div class="card-title-sm">{{ icon('users', 18) }} Who has access</div>
+    <div class="tv-card"><div class="tv-scroll">
+    <table class="tv-table">
+      <thead><tr><th>User</th><th>Access</th><th>Since (IST)</th><th></th></tr></thead>
+      <tbody>
+      {% for p in permissions %}
+      <tr>
+        <td><div class="doc-name">{{ p.username }}</div><div class="doc-sub">{{ p.role }}</div></td>
+        <td><span class="pill {{ 'pill-warn' if p.access_level == 'edit' else 'pill-info' }}">{{ p.access_level }}</span></td>
+        <td>{{ p.granted_at | ist }}</td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('permissions.revoke', doc_id=doc.id) }}" class="d-inline" data-confirm="Revoke access for {{ p.username }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ p.user_id }}">
+            <button class="btn btn-danger-soft btn-sm" type="submit">Revoke</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4"><div class="empty">{{ icon('lock', 38) }}<div>Only you can open this document.</div></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+</div>
+
+<h2 class="h5 mb-3">Access history</h2>
+{% include "_audit_table.html" %}
+{% endblock %}

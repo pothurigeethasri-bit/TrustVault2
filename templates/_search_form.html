@@ -1,0 +1,17 @@
+<form method="get" class="tv-card tv-card-body mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label">File name</label>
+      <input class="form-control" name="q" placeholder="Search by name" value="{{ f.get('q','') }}" maxlength="100"></div>
+    <div class="col-md-2"><label class="form-label">Category</label>
+      <input class="form-control" name="category" placeholder="Any" value="{{ f.get('category','') }}" maxlength="100"></div>
+    {% if show_owner %}
+    <div class="col-md-2"><label class="form-label">Owner</label>
+      <input class="form-control" name="owner" placeholder="Any" value="{{ f.get('owner','') }}" maxlength="100"></div>
+    {% endif %}
+    <div class="col-md-2"><label class="form-label">Uploaded from</label>
+      <input class="form-control" type="date" name="date_from" value="{{ f.get('date_from','') }}"></div>
+    <div class="col-md-2"><label class="form-label">Uploaded to</label>
+      <input class="form-control" type="date" name="date_to" value="{{ f.get('date_to','') }}"></div>
+    <div class="col-md-1 d-grid"><button class="btn btn-tv btn-sm py-2" type="submit">Search</button></div>
+  </div>
+</form>

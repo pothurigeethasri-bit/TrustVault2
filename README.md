@@ -14,8 +14,8 @@ server-side permission checks on every file access, and a tamper-evident audit l
 ## Project status
 - [x] Step 1: Setup, schema, audit module
 - [x] Step 2: Authentication and roles
-- [ ] Step 3: Document upload and management
-- [ ] Step 4: Permissions, grant and revoke
+- [x] Step 3: Document upload and management
+- [x] Step 4: Permissions, grant and revoke
 - [ ] Step 5: Admin dashboard and owner history
 - [ ] Step 6: Security tests, THREATS.md, deployment
 - [ ] Step 7: API docs, demo video, write-up

@@ -1,0 +1,22 @@
+{% from "_icons.html" import icon %}
+<div class="tv-card">
+<div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr><th>Time (IST)</th><th>User</th><th>Activity</th><th>Result</th><th class="d-none d-md-table-cell">IP</th><th class="d-none d-lg-table-cell">Details</th></tr></thead>
+  <tbody>
+  {% for e in events %}
+  <tr>
+    <td class="text-nowrap">{{ e.ts | ist(seconds=True) }}</td>
+    <td class="doc-name">{{ e.username }}</td>
+    <td>{{ e.action | replace('_', ' ') | title }}</td>
+    <td><span class="pill {{ 'pill-ok' if e.result == 'SUCCESS' else ('pill-bad' if e.result == 'DENIED' else 'pill-warn') }}">{{ e.result }}</span></td>
+    <td class="d-none d-md-table-cell">{{ e.ip_address or '-' }}</td>
+    <td class="d-none d-lg-table-cell doc-sub">{{ e.details or '' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6"><div class="empty">{{ icon('activity', 38) }}<div>No activity recorded yet.</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>

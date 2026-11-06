@@ -27,3 +27,40 @@ def init_db():
     finally:
         conn.close()
     audit.init_audit_table()
+
+
+def fetch_all(sql, params=()):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def fetch_one(sql, params=()):
+    rows = fetch_all(sql, params)
+    return rows[0] if rows else None
+
+
+def execute(sql, params=()):
+    conn = get_connection()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+    finally:
+        conn.close()
+
+
+def execute_returning(sql, params=()):
+    """Run a write that has RETURNING <col>; give back the first column or None."""
+    conn = get_connection()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        conn.close()

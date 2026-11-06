@@ -1,14 +1,54 @@
 {% extends "base.html" %}
-{% block title %}Owner Panel - TrustVault{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}My documents - TrustVault{% endblock %}
 {% block content %}
-<h1 class="h3">Owner Panel</h1>
-<p class="text-muted">Signed in as <strong>{{ g.user.username }}</strong>.</p>
-<div class="card shadow-sm"><div class="card-body">
-<p class="mb-2">Coming in Steps 3 to 5:</p><ul class="mb-0">
-<li>Upload documents</li>
-<li>Create categories</li>
-<li>Search and manage your documents</li>
-<li>Grant and revoke read/edit access</li>
-<li>View document access history</li>
-</ul></div></div>
+<div class="page-head">
+  <h1>Hello, <span class="gradient-text">{{ g.user.username }}</span></h1>
+  <p class="text-muted mb-0">Upload documents, organise them, and decide exactly who can open them.</p>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-sm-4"><div class="tv-card stat"><span class="stat-icon">{{ icon('file', 22) }}</span>
+    <div><div class="stat-value">{{ docs | length }}</div><div class="stat-label">Documents</div></div></div></div>
+  <div class="col-sm-4"><div class="tv-card stat"><span class="stat-icon">{{ icon('drive', 22) }}</span>
+    <div><div class="stat-value">{{ docs | sum(attribute='size_bytes') | filesize }}</div><div class="stat-label">Storage used</div></div></div></div>
+  <div class="col-sm-4"><div class="tv-card stat"><span class="stat-icon">{{ icon('folder', 22) }}</span>
+    <div><div class="stat-value">{{ categories | length }}</div><div class="stat-label">Categories</div></div></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <form method="post" action="{{ url_for('documents.upload') }}" enctype="multipart/form-data" class="tv-card tv-card-body h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="card-title-sm">{{ icon('upload', 18) }} Upload a document</div>
+      <div class="row g-2">
+        <div class="col-md-6"><input class="form-control" type="file" name="file" required
+          accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx,.pptx" aria-label="File to upload"></div>
+        <div class="col-md-4">
+          <select class="form-select" name="category_id" aria-label="Category">
+            <option value="">No category</option>
+            {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-grid"><button class="btn btn-tv" type="submit">Upload</button></div>
+      </div>
+      <div class="form-text mt-2">PDF, PNG, JPG, TXT, CSV, DOCX, XLSX or PPTX &middot; max 10 MB &middot; stored privately</div>
+    </form>
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="{{ url_for('documents.add_category') }}" class="tv-card tv-card-body h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="card-title-sm">{{ icon('folder', 18) }} New category</div>
+      <div class="input-group">
+        <input class="form-control" name="name" maxlength="50" required placeholder="e.g. HR" aria-label="Category name">
+        <button class="btn btn-ghost" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<h2 class="h5 mb-3">My documents</h2>
+{% include "_search_form.html" %}
+{% set empty_text = "No documents yet. Upload your first one above." %}
+{% include "_doc_table.html" %}
 {% endblock %}

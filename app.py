@@ -1,11 +1,14 @@
 """TrustVault - Flask application entry point."""
 import os
+from datetime import timedelta, timezone
 
 from dotenv import load_dotenv
-from flask import Flask, g, redirect, render_template, url_for
+from flask import Flask, g, redirect, render_template, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import auth
+import documents
+import permissions
 
 load_dotenv()
 
@@ -23,14 +26,50 @@ def create_app():
         SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1",
         PERMANENT_SESSION_LIFETIME=30 * 60,          # 30 minutes
         MAX_CONTENT_LENGTH=int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024,
+        # Private folder OUTSIDE static/: files are only reachable through checked routes.
+        UPLOAD_DIR=os.path.abspath(os.environ.get("UPLOAD_DIR", "uploads")),
     )
+    os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
 
     # Behind Render's proxy, trust one hop so request.remote_addr is the real client.
     if os.environ.get("TRUST_PROXY", "0") == "1":
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     app.register_blueprint(auth.auth_bp)
+    app.register_blueprint(documents.docs_bp)
+    app.register_blueprint(permissions.perm_bp)
     app.jinja_env.globals["csrf_token"] = auth.csrf_token
+    app.jinja_env.globals["inline_types"] = documents.INLINE_TYPES
+
+    IST = timezone(timedelta(hours=5, minutes=30))     # India has no daylight saving
+
+    @app.template_filter("ist")
+    def to_ist(value, seconds=False):
+        if value is None:
+            return ""
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(IST).strftime("%d %b %Y %H:%M:%S" if seconds else "%d %b %Y %H:%M")
+
+    @app.template_filter("filetype")
+    def filetype(mime):
+        if mime == "application/pdf":
+            return "pdf"
+        if mime.startswith("image/"):
+            return "img"
+        for key, name in (("wordprocessingml", "doc"), ("spreadsheetml", "xls"),
+                          ("presentationml", "ppt")):
+            if key in mime:
+                return name
+        return "csv" if mime == "text/csv" else "txt"
+
+    @app.template_filter("filesize")
+    def filesize(n):
+        for unit in ("B", "KB", "MB"):
+            if n < 1024:
+                return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+            n /= 1024
+        return f"{n:.1f} GB"
 
     # ---------------------------------------------------------------- pages
     @app.route("/")
@@ -50,12 +89,17 @@ def create_app():
     @app.route("/owner")
     @auth.role_required("owner")
     def owner():
-        return render_template("owner_dashboard.html")
+        docs = documents.search_documents(g.user["id"], role=g.user["role"],
+                                   **documents.filters_from_request())
+        return render_template("owner_dashboard.html", docs=docs, f=request.args,
+                               categories=documents.list_categories(g.user["id"]))
 
     @app.route("/viewer")
     @auth.role_required("viewer")
     def viewer():
-        return render_template("viewer_dashboard.html")
+        docs = documents.search_documents(g.user["id"], role=g.user["role"],
+                                   **documents.filters_from_request())
+        return render_template("viewer_dashboard.html", docs=docs, f=request.args)
 
     # --------------------------------------------------------------- errors
     messages = {400: "Bad request.", 403: "You do not have permission to view this page.",

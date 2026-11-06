@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Edit - TrustVault{% endblock %}
+{% block content %}
+<a href="{{ url_for('owner') }}" class="small">&larr; Back</a>
+<div class="page-head mt-2"><h1 class="h3">Edit <span class="gradient-text">{{ doc.original_name }}</span></h1></div>
+<form method="post" enctype="multipart/form-data" class="tv-card tv-card-body mw-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label" for="name">Name (keep the extension)</label>
+  <input class="form-control mb-3" id="name" name="name" maxlength="150" value="{{ doc.original_name }}">
+  <label class="form-label" for="file">Replace the file (same type, optional)</label>
+  <input class="form-control mb-4" id="file" type="file" name="file">
+  <button class="btn btn-tv" type="submit">Save changes</button>
+</form>
+{% endblock %}

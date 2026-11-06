@@ -1,23 +1,25 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Sign in - TrustVault{% endblock %}
 {% block content %}
-<div class="auth-card card shadow-sm mx-auto">
-  <div class="card-body p-4">
-    <h1 class="h4 mb-1">Sign in</h1>
-    <p class="text-muted small">Secure document sharing with a real audit trail.</p>
+<div class="auth-wrap">
+  <div class="tv-card auth-card">
+    <div class="auth-icon">{{ icon('lock', 26) }}</div>
+    <h1 class="h3 mb-1">Welcome <span class="gradient-text">back</span></h1>
+    <p class="text-muted mb-4">Sign in to your secure vault.</p>
     <form method="post" autocomplete="on">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3">
         <label class="form-label" for="username">Username</label>
-        <input class="form-control" id="username" name="username" required maxlength="150" autofocus>
+        <input class="form-control" id="username" name="username" required maxlength="150" autofocus autocomplete="username">
       </div>
-      <div class="mb-3">
+      <div class="mb-4">
         <label class="form-label" for="password">Password</label>
-        <input class="form-control" id="password" name="password" type="password" required>
+        <input class="form-control" id="password" name="password" type="password" required autocomplete="current-password">
       </div>
-      <button class="btn btn-primary w-100" type="submit">Sign in</button>
+      <button class="btn btn-tv w-100" type="submit">Sign in</button>
     </form>
-    <p class="small mt-3 mb-0">No account? <a href="{{ url_for('auth.register') }}">Register</a></p>
+    <p class="small text-muted mt-4 mb-0 text-center">New here? <a href="{{ url_for('auth.register') }}">Create an account</a></p>
   </div>
 </div>
 {% endblock %}

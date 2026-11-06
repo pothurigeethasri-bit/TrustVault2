@@ -1,0 +1,48 @@
+{% from "_icons.html" import icon %}
+<div class="tv-card">
+<div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr>
+    <th>Document</th><th class="d-none d-md-table-cell">Owner</th><th class="d-none d-md-table-cell">Size</th>
+    <th class="d-none d-lg-table-cell">Uploaded (IST)</th><th>Access</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for d in docs %}
+  <tr>
+    <td>
+      <div class="d-flex align-items-center gap-3">
+        <span class="ft ft-{{ d.mime_type | filetype }}">{{ d.mime_type | filetype | upper }}</span>
+        <div>
+          <div class="doc-name">{{ d.original_name }}</div>
+          {% if d.category %}<span class="pill pill-cat">{{ d.category }}</span>{% endif %}
+        </div>
+      </div>
+    </td>
+    <td class="d-none d-md-table-cell">{{ d.owner }}</td>
+    <td class="d-none d-md-table-cell">{{ d.size_bytes | filesize }}</td>
+    <td class="d-none d-lg-table-cell">{{ d.uploaded_at | ist }}</td>
+    <td><span class="pill {{ {'owner':'pill-ok','edit':'pill-warn','read':'pill-info'}[d.access] }}">{{ d.access }}</span></td>
+    <td class="text-end text-nowrap">
+      {% if d.mime_type in inline_types %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.view_document', doc_id=d.id) }}" target="_blank" rel="noopener">View</a>
+      {% endif %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.download_document', doc_id=d.id) }}">Download</a>
+      {% if d.access in ('owner', 'edit') and g.user.role == 'owner' %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.edit_document', doc_id=d.id) }}">Edit</a>
+      {% endif %}
+      {% if d.access == 'owner' %}
+      <a class="btn btn-tv btn-sm" href="{{ url_for('permissions.share_page', doc_id=d.id) }}">Share</a>
+      <form method="post" action="{{ url_for('documents.delete_document', doc_id=d.id) }}" class="d-inline" data-confirm="Delete this document permanently?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger-soft btn-sm" type="submit">Delete</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6"><div class="empty">{{ icon('file', 38) }}<div>{{ empty_text }}</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>

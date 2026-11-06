@@ -1,13 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Admin Panel - TrustVault{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}Admin - TrustVault{% endblock %}
 {% block content %}
-<h1 class="h3">Admin Panel</h1>
-<p class="text-muted">Signed in as <strong>{{ g.user.username }}</strong>.</p>
-<div class="card shadow-sm"><div class="card-body">
-<p class="mb-2">Coming in Step 5:</p><ul class="mb-0">
-<li>Manage users and roles</li>
-<li>View document activity</li>
-<li>View permission changes</li>
-<li>Monitor security events</li>
-</ul></div></div>
+<div class="page-head">
+  <h1>Admin <span class="gradient-text">console</span></h1>
+  <p class="text-muted mb-0">Signed in as {{ g.user.username }}.</p>
+</div>
+<div class="row g-3">
+  {% for title, text, ic in [
+    ('Users and roles', 'Manage accounts and change roles.', 'users'),
+    ('Document activity', 'See every upload, view and download.', 'activity'),
+    ('Permission changes', 'Track every grant and revoke.', 'key'),
+    ('Security events', 'Denied and failed attempts.', 'alert')] %}
+  <div class="col-md-6"><div class="tv-card stat"><span class="stat-icon">{{ icon(ic, 22) }}</span>
+    <div><div class="doc-name">{{ title }}</div><div class="doc-sub">{{ text }} Coming in the next step.</div></div></div></div>
+  {% endfor %}
+</div>
 {% endblock %}

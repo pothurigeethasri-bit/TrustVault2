@@ -2,8 +2,8 @@
 {% block title %}Error {{ code }} - TrustVault{% endblock %}
 {% block content %}
 <div class="text-center py-5">
-  <h1 class="display-4">{{ code }}</h1>
-  <p class="lead">{{ message }}</p>
-  <a class="btn btn-primary" href="{{ url_for('index') }}">Go to dashboard</a>
+  <div class="error-code gradient-text">{{ code }}</div>
+  <p class="lead text-muted my-3">{{ message }}</p>
+  <a class="btn btn-tv" href="{{ url_for('index') }}">Back to my dashboard</a>
 </div>
 {% endblock %}

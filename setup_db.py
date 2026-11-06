@@ -10,6 +10,7 @@ from database import get_connection, init_db
 DEMO_USERS = [
     ("admin", "admin"),
     ("geetha", "owner"),
+    ("meena", "owner"),
     ("ravi", "viewer"),
     ("sita", "viewer"),
 ]
@@ -33,4 +34,4 @@ def seed():
 if __name__ == "__main__":
     init_db()
     seed()
-    print("Database ready. Demo users: admin, geetha (owner), ravi, sita (viewers).")
+    print("Database ready. Demo users: admin, geetha + meena (owners), ravi + sita (viewers).")

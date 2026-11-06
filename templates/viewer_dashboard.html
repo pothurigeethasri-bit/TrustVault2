@@ -1,12 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Viewer Panel - TrustVault{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}Shared with me - TrustVault{% endblock %}
 {% block content %}
-<h1 class="h3">Viewer Panel</h1>
-<p class="text-muted">Signed in as <strong>{{ g.user.username }}</strong>.</p>
-<div class="card shadow-sm"><div class="card-body">
-<p class="mb-2">Coming in Steps 3 and 4:</p><ul class="mb-0">
-<li>View documents shared with you</li>
-<li>Download permitted documents</li>
-<li>Search accessible documents</li>
-</ul></div></div>
+<div class="page-head">
+  <h1>Shared with <span class="gradient-text">you</span></h1>
+  <p class="text-muted mb-0">Documents other people have given you access to. Access can be withdrawn at any time.</p>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-sm-6"><div class="tv-card stat"><span class="stat-icon">{{ icon('file', 22) }}</span>
+    <div><div class="stat-value">{{ docs | length }}</div><div class="stat-label">Documents available</div></div></div></div>
+  <div class="col-sm-6"><div class="tv-card stat"><span class="stat-icon">{{ icon('users', 22) }}</span>
+    <div><div class="stat-value">{{ docs | map(attribute='owner') | unique | list | length }}</div><div class="stat-label">People sharing with you</div></div></div></div>
+</div>
+{% set show_owner = true %}
+{% include "_search_form.html" %}
+{% set empty_text = "Nothing has been shared with you yet." %}
+{% include "_doc_table.html" %}
 {% endblock %}
