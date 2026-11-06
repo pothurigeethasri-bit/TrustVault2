@@ -32,6 +32,10 @@ def seed():
 
 
 if __name__ == "__main__":
+    # Setup needs table-creation rights. If the app itself runs as a restricted role
+    # (see harden_db.py), point SETUP_DATABASE_URL at the owner account.
+    if os.environ.get("SETUP_DATABASE_URL"):
+        os.environ["DATABASE_URL"] = os.environ["SETUP_DATABASE_URL"]
     init_db()
     seed()
     print("Database ready. Demo users: admin, geetha + meena (owners), ravi + sita (viewers).")

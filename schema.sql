@@ -38,5 +38,11 @@ CREATE TABLE IF NOT EXISTS permissions (
     UNIQUE (document_id, user_id)
 );
 
+-- Only used when STORAGE_BACKEND=db (hosts with an ephemeral disk). Never exposed by any route.
+CREATE TABLE IF NOT EXISTS file_blobs (
+    stored_name TEXT PRIMARY KEY,
+    data        BYTEA NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_docs_owner ON documents (owner_id);
 CREATE INDEX IF NOT EXISTS idx_perm_user  ON permissions (user_id);

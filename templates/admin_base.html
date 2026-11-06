@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Admin - TrustVault{% endblock %}
+{% block content %}
+{% set tabs = [
+  ('admin', 'Overview', 'shield'),
+  ('adminp.users', 'Users', 'users'),
+  ('adminp.activity', 'Documents', 'file'),
+  ('adminp.permission_changes', 'Permissions', 'key'),
+  ('adminp.security_events', 'Security', 'alert'),
+  ('adminp.audit_log', 'Audit log', 'activity')] %}
+<nav class="admin-tabs" aria-label="Admin sections">
+  {% for ep, label, ic in tabs %}
+  <a href="{{ url_for(ep) }}" class="admin-tab{{ ' active' if request.endpoint == ep else '' }}"
+     {% if request.endpoint == ep %}aria-current="page"{% endif %}>{{ icon(ic, 16) }}<span>{{ label }}</span></a>
+  {% endfor %}
+</nav>
+{% block admin_content %}{% endblock %}
+{% endblock %}

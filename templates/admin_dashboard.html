@@ -1,19 +1,54 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% from "_icons.html" import icon %}
-{% block title %}Admin - TrustVault{% endblock %}
-{% block content %}
+{% block admin_content %}
 <div class="page-head">
   <h1>Admin <span class="gradient-text">console</span></h1>
-  <p class="text-muted mb-0">Signed in as {{ g.user.username }}.</p>
+  <p class="text-muted mb-0">Signed in as {{ g.user.username }}. Users, documents and security activity at a glance.</p>
 </div>
-<div class="row g-3">
-  {% for title, text, ic in [
-    ('Users and roles', 'Manage accounts and change roles.', 'users'),
-    ('Document activity', 'See every upload, view and download.', 'activity'),
-    ('Permission changes', 'Track every grant and revoke.', 'key'),
-    ('Security events', 'Denied and failed attempts.', 'alert')] %}
-  <div class="col-md-6"><div class="tv-card stat"><span class="stat-icon">{{ icon(ic, 22) }}</span>
-    <div><div class="doc-name">{{ title }}</div><div class="doc-sub">{{ text }} Coming in the next step.</div></div></div></div>
+
+<div class="row g-3 mb-3">
+  {% for value, label, ic in [
+    (stats.active ~ ' / ' ~ stats.users, 'Active users', 'users'),
+    (stats.documents, 'Documents', 'file'),
+    (stats.grants, 'Active permissions', 'key'),
+    (summary.doc_events, 'Document actions, 24h', 'activity')] %}
+  <div class="col-6 col-lg-3"><div class="tv-card stat"><span class="stat-icon">{{ icon(ic, 22) }}</span>
+    <div><div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div></div></div>
   {% endfor %}
 </div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="tv-card tv-card-body h-100">
+      <div class="card-title-sm">{{ icon('alert', 18) }} Security, last 24 hours</div>
+      <div class="row text-center g-2">
+        <div class="col-4"><div class="stat-value {{ 'text-bad' if summary.failed_logins else '' }}">{{ summary.failed_logins }}</div><div class="stat-label">Failed logins</div></div>
+        <div class="col-4"><div class="stat-value {{ 'text-bad' if summary.denied else '' }}">{{ summary.denied }}</div><div class="stat-label">Denied attempts</div></div>
+        <div class="col-4"><div class="stat-value {{ 'text-bad' if summary.csrf else '' }}">{{ summary.csrf }}</div><div class="stat-label">CSRF blocks</div></div>
+      </div>
+      <div class="mt-3"><a href="{{ url_for('adminp.security_events') }}" class="small">View all security events &rarr;</a></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="{{ url_for('adminp.integrity_check') }}" class="tv-card tv-card-body h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="card-title-sm">{{ icon('lock', 18) }} Audit integrity</div>
+      <p class="doc-sub">Recomputes the hash chain over every audit row. If anyone edited or removed a record, this finds it.</p>
+      <button class="btn btn-tv btn-sm" type="submit">Run integrity check</button>
+      {% if last_check %}
+      <div class="doc-sub mt-2">Last run {{ last_check.ts | ist }} by {{ last_check.username }}:
+        <span class="pill {{ 'pill-ok' if last_check.result == 'SUCCESS' else 'pill-bad' }}">{{ 'intact' if last_check.result == 'SUCCESS' else 'TAMPERED' }}</span></div>
+      {% else %}
+      <div class="doc-sub mt-2">Not run yet.</div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-end mb-2">
+  <h2 class="h5 mb-0">Latest activity</h2>
+  <a href="{{ url_for('adminp.audit_log') }}" class="small">Full audit log &rarr;</a>
+</div>
+{% set events = recent %}
+{% include "_admin_events_table.html" %}
 {% endblock %}

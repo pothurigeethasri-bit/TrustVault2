@@ -63,7 +63,9 @@ def access_level(user, doc):
     if user is None or doc is None:
         return None
     if doc["owner_id"] == user["id"]:
-        return "owner"
+        # Ownership powers need the Owner ROLE. If an admin demotes someone, they
+        # lose the right to share/delete/edit at once (they can still read their file).
+        return "owner" if user["role"] == "owner" else "read"
     if user["role"] == "admin":
         return None                       # admins manage the system, not document contents
     level = get_permission(doc["id"], user["id"])

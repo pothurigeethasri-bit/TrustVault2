@@ -1,0 +1,30 @@
+{% from "_icons.html" import icon %}
+<div class="tv-card">
+<div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr>
+    <th>Time (IST)</th><th>User</th><th>Activity</th>
+    <th class="d-none d-md-table-cell">Document</th><th class="d-none d-md-table-cell">Target</th>
+    <th>Result</th><th class="d-none d-lg-table-cell">IP</th><th class="d-none d-lg-table-cell">Details</th>
+  </tr></thead>
+  <tbody>
+  {% for e in events %}
+  <tr>
+    <td class="text-nowrap">{{ e.ts | ist(seconds=True) }}</td>
+    <td class="doc-name text-nowrap">{{ e.username }}</td>
+    <td>{{ e.action | replace('_', ' ') | title }}</td>
+    <td class="d-none d-md-table-cell">
+      {% if e.document_id %}<span class="doc-sub">#{{ e.document_id }}</span> {{ e.document_name or '(deleted)' }}{% else %}-{% endif %}
+    </td>
+    <td class="d-none d-md-table-cell">{{ e.target_username or '-' }}</td>
+    <td><span class="pill {{ 'pill-ok' if e.result == 'SUCCESS' else ('pill-bad' if e.result == 'DENIED' else 'pill-warn') }}">{{ e.result }}</span></td>
+    <td class="d-none d-lg-table-cell">{{ e.ip_address or '-' }}</td>
+    <td class="d-none d-lg-table-cell doc-sub">{{ e.details or '' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8"><div class="empty">{{ icon('activity', 38) }}<div>Nothing recorded here yet.</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>

@@ -6,9 +6,11 @@ from dotenv import load_dotenv
 from flask import Flask, g, redirect, render_template, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import admin_panel
 import auth
 import documents
 import permissions
+import storage
 
 load_dotenv()
 
@@ -28,8 +30,13 @@ def create_app():
         MAX_CONTENT_LENGTH=int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024,
         # Private folder OUTSIDE static/: files are only reachable through checked routes.
         UPLOAD_DIR=os.path.abspath(os.environ.get("UPLOAD_DIR", "uploads")),
+        # "disk" (local dev) or "db" (hosts with an ephemeral disk, e.g. Render). See storage.py.
+        STORAGE_BACKEND=os.environ.get("STORAGE_BACKEND", "disk"),
     )
-    os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
+    if app.config["STORAGE_BACKEND"] not in storage.BACKENDS:
+        raise RuntimeError("STORAGE_BACKEND must be 'disk' or 'db'")
+    if app.config["STORAGE_BACKEND"] == "disk":
+        os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
 
     # Behind Render's proxy, trust one hop so request.remote_addr is the real client.
     if os.environ.get("TRUST_PROXY", "0") == "1":
@@ -38,6 +45,7 @@ def create_app():
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(documents.docs_bp)
     app.register_blueprint(permissions.perm_bp)
+    app.register_blueprint(admin_panel.admin_bp)
     app.jinja_env.globals["csrf_token"] = auth.csrf_token
     app.jinja_env.globals["inline_types"] = documents.INLINE_TYPES
 
@@ -84,7 +92,7 @@ def create_app():
     @app.route("/admin")
     @auth.role_required("admin")
     def admin():
-        return render_template("admin_dashboard.html")
+        return admin_panel.overview()
 
     @app.route("/owner")
     @auth.role_required("owner")
@@ -124,6 +132,8 @@ def create_app():
             "default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; "
             "script-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; "
             "frame-ancestors 'none'")
+        if app.config["SESSION_COOKIE_SECURE"]:          # production over HTTPS
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         if g.get("user"):
             resp.headers["Cache-Control"] = "no-store"
         return resp

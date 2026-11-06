@@ -1,6 +1,6 @@
 """Document upload, categories, search, secure view/download, delete."""
 import hashlib
-import os
+import io
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -9,6 +9,7 @@ from flask import (Blueprint, abort, current_app, flash, g, redirect,
                    render_template, request, send_file, url_for)
 
 import audit
+import storage
 from auth import login_required, role_required
 from database import execute, execute_returning, fetch_all, fetch_one
 from permissions import require_access
@@ -85,9 +86,9 @@ def search_documents(user_id, q=None, category=None, owner=None,
     sql += " ORDER BY d.uploaded_at DESC LIMIT %s"
     params.append(limit)
     rows = fetch_all(sql, params)
-    if role != "owner":                      # viewers can never edit
+    if role != "owner":                      # only the Owner role can edit or manage
         for r in rows:
-            if r["access"] == "edit":
+            if r["access"] in ("edit", "owner"):
                 r["access"] = "read"
     return rows
 
@@ -109,12 +110,6 @@ def filters_from_request():
 
     return dict(q=text("q"), category=text("category"), owner=text("owner"),
                 date_from=date("date_from"), date_to=date("date_to"))
-
-
-# ------------------------------------------------------------------- helpers
-def _path_for(stored_name):
-    # stored_name comes from OUR database (random hex), never from the user.
-    return os.path.join(current_app.config["UPLOAD_DIR"], stored_name)
 
 
 # -------------------------------------------------------------------- routes
@@ -145,15 +140,13 @@ def upload():
             return redirect(url_for("owner"))
         category_id = int(raw_cat)
 
-    stored_name = uuid.uuid4().hex
-    path = _path_for(stored_name)
-    with open(path, "wb") as fh:
-        fh.write(data)
+    stored_name = uuid.uuid4().hex          # random; the user's filename is never used on disk
+    storage.save(stored_name, data)
     try:
         doc_id = insert_document(g.user["id"], category_id, name, stored_name, mime,
                                  len(data), hashlib.sha256(data).hexdigest())
     except Exception:
-        os.remove(path)
+        storage.delete(stored_name)
         raise
     audit.log_event(audit.UPLOAD, audit.SUCCESS, user=g.user, document_id=doc_id,
                     ip_address=ip, details=f"{name} ({len(data)} bytes)")
@@ -178,15 +171,15 @@ def add_category():
 
 def _serve(doc_id, action, inline):
     doc = require_access(doc_id, "read", action)       # aborts 403 + logs DENIED
-    path = _path_for(doc["stored_name"])
-    if not os.path.isfile(path):
+    data = storage.load(doc["stored_name"])
+    if data is None:
         audit.log_event(action, audit.FAILURE, user=g.user, document_id=doc_id,
                         ip_address=audit.client_ip(request), details="file missing on disk")
         abort(404)
     audit.log_event(action, audit.SUCCESS, user=g.user, document_id=doc_id,
                     ip_address=audit.client_ip(request), details=doc["original_name"])
     as_attachment = not (inline and doc["mime_type"] in INLINE_TYPES)
-    return send_file(path, mimetype=doc["mime_type"], as_attachment=as_attachment,
+    return send_file(io.BytesIO(data), mimetype=doc["mime_type"], as_attachment=as_attachment,
                      download_name=doc["original_name"], max_age=0)
 
 
@@ -207,10 +200,7 @@ def download_document(doc_id):
 def delete_document(doc_id):
     doc = require_access(doc_id, "owner", audit.DELETE_DOC)
     delete_document_row(doc_id)
-    try:
-        os.remove(_path_for(doc["stored_name"]))
-    except FileNotFoundError:
-        pass
+    storage.delete(doc["stored_name"])
     audit.log_event(audit.DELETE_DOC, audit.SUCCESS, user=g.user, document_id=doc_id,
                     ip_address=audit.client_ip(request), details=doc["original_name"])
     flash(f"Deleted {doc['original_name']}.", "success")
@@ -232,7 +222,7 @@ def edit_document(doc_id):
     old_ext = doc["original_name"].rsplit(".", 1)[-1].lower()
     name, stored, size, sha = (doc["original_name"], doc["stored_name"],
                                doc["size_bytes"], doc["sha256"])
-    new_path = None
+    new_stored = None
 
     new_name = request.form.get("name", "").strip()
     if new_name and new_name != name:
@@ -257,28 +247,23 @@ def edit_document(doc_id):
         if mime != doc["mime_type"]:
             flash("The replacement must be the same type of file.", "danger")
             return redirect(url_for("documents.edit_document", doc_id=doc_id))
-        stored = uuid.uuid4().hex
-        new_path = _path_for(stored)
-        with open(new_path, "wb") as fh:
-            fh.write(data)
+        stored = new_stored = uuid.uuid4().hex
+        storage.save(stored, data)
         size, sha = len(data), hashlib.sha256(data).hexdigest()
 
-    if name == old_name and new_path is None:
+    if name == old_name and new_stored is None:
         flash("No changes made.", "info")
         return redirect(url_for("documents.edit_document", doc_id=doc_id))
 
     try:
         update_document(doc_id, name, stored, size, sha)
     except Exception:
-        if new_path:
-            os.remove(new_path)
+        if new_stored:
+            storage.delete(new_stored)
         raise
-    if new_path:
-        try:
-            os.remove(_path_for(old_stored))
-        except FileNotFoundError:
-            pass
-    what = ("replaced file" if new_path else "") + (" and " if new_path and name != old_name else "") \
+    if new_stored:
+        storage.delete(old_stored)
+    what = ("replaced file" if new_stored else "") + (" and " if new_stored and name != old_name else "") \
         + (f"renamed to {name}" if name != old_name else "")
     audit.log_event(audit.EDIT, audit.SUCCESS, user=g.user, document_id=doc_id,
                     ip_address=ip, details=what)

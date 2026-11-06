@@ -1,0 +1,47 @@
+{% extends "admin_base.html" %}
+{% from "_icons.html" import icon %}
+{% block admin_content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <p class="text-muted mb-0">{{ intro }}</p>
+</div>
+
+<form method="get" action="{{ url_for(endpoint) }}" class="row g-2 mb-3 align-items-end">
+  <div class="col-sm-4">
+    <label class="form-label" for="f-user">User</label>
+    <input class="form-control" id="f-user" name="user" value="{{ f.user }}" maxlength="100" placeholder="username contains...">
+  </div>
+  {% if action_filter %}
+  <div class="col-sm-3">
+    <label class="form-label" for="f-action">Activity</label>
+    <select class="form-select" id="f-action" name="action">
+      <option value="">All activity</option>
+      {% for a in all_actions %}<option value="{{ a }}" {{ 'selected' if f.action == a else '' }}>{{ a | replace('_', ' ') | title }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if show_result_filter %}
+  <div class="col-sm-3">
+    <label class="form-label" for="f-result">Result</label>
+    <select class="form-select" id="f-result" name="result">
+      <option value="">Any result</option>
+      {% for r in ['SUCCESS', 'DENIED', 'FAILURE'] %}<option value="{{ r }}" {{ 'selected' if f.result == r else '' }}>{{ r | title }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="col-auto d-flex gap-2">
+    <button class="btn btn-tv btn-sm" type="submit">Filter</button>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for(endpoint) }}">Clear</a>
+  </div>
+</form>
+
+<div class="doc-sub mb-2">{{ total }} record{{ '' if total == 1 else 's' }}{% if pages > 1 %} &middot; page {{ page }} of {{ pages }}{% endif %}</div>
+{% include "_admin_events_table.html" %}
+
+{% if pages > 1 %}
+<nav class="d-flex justify-content-between mt-3" aria-label="Pages">
+  {% if page > 1 %}<a class="btn btn-ghost btn-sm" href="{{ url_for(endpoint, page=page - 1, user=f.user, result=f.result, action=f.action) }}">&larr; Newer</a>{% else %}<span></span>{% endif %}
+  {% if page < pages %}<a class="btn btn-ghost btn-sm" href="{{ url_for(endpoint, page=page + 1, user=f.user, result=f.result, action=f.action) }}">Older &rarr;</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

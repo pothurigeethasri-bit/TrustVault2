@@ -1,0 +1,35 @@
+# Render Blueprint: New + > Blueprint, pick this repo. You only have to type SEED_PASSWORD.
+databases:
+  - name: trustvault-db
+    plan: free
+    databaseName: trustvault
+    user: trustvault_owner
+
+services:
+  - type: web
+    name: trustvault
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # setup_db.py is idempotent: creates tables if missing, seeds the demo users if missing.
+    startCommand: python setup_db.py && gunicorn app:app --workers 2 --timeout 60 --access-logfile -
+    healthCheckPath: /login
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustvault-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SEED_PASSWORD          # password for the demo accounts; set it in the dashboard
+        sync: false
+      - key: STORAGE_BACKEND        # Render's disk is wiped on every deploy, so keep files in Postgres
+        value: db
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: TRUST_PROXY            # trust Render's one proxy hop for the real client IP
+        value: "1"
+      - key: MAX_UPLOAD_MB
+        value: "10"

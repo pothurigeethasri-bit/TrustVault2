@@ -32,6 +32,13 @@ REGISTER = "REGISTER_USER"
 ACCESS_DENIED = "ACCESS_DENIED"
 CSRF_FAILURE = "CSRF_FAILURE"
 CREATE_CATEGORY = "CREATE_CATEGORY"
+DEACTIVATE_USER = "DEACTIVATE_USER"
+ACTIVATE_USER = "ACTIVATE_USER"
+INTEGRITY_CHECK = "AUDIT_INTEGRITY_CHECK"
+
+# Which actions belong on which admin screen.
+DOCUMENT_ACTIONS = (UPLOAD, VIEW, DOWNLOAD, EDIT, DELETE_DOC)
+PERMISSION_ACTIONS = (GRANT, REVOKE, ROLE_CHANGE, DEACTIVATE_USER, ACTIVATE_USER)
 
 SUCCESS, DENIED, FAILURE = "SUCCESS", "DENIED", "FAILURE"
 
@@ -209,10 +216,56 @@ def get_security_events(limit=100):
 
 
 def get_permission_changes(limit=100):
-    """Admin: grants, revokes, and role changes."""
+    """Admin: grants, revokes, role changes and account (de)activations."""
     return _fetch(
-        f"SELECT {_COLS} FROM audit_log WHERE action IN (%s,%s,%s) "
-        "ORDER BY id DESC LIMIT %s", (GRANT, REVOKE, ROLE_CHANGE, min(int(limit), 500)))
+        f"SELECT {_COLS} FROM audit_log WHERE action = ANY(%s) "
+        "ORDER BY id DESC LIMIT %s", (list(PERMISSION_ACTIONS), min(int(limit), 500)))
+
+
+def search_events(actions=None, only_problems=False, result=None, username=None,
+                  limit=50, offset=0):
+    """Admin screens: filterable, paginated feed.
+
+    Returns (rows, total). Each row also carries `target_username` (who was
+    granted/revoked/changed) and `document_name` (None if the document has
+    since been deleted - the audit row itself is never touched).
+    `only_problems` keeps DENIED and FAILURE rows (the security-events view).
+    """
+    where, params = [], []
+    if actions:
+        where.append("a.action = ANY(%s)"); params.append(list(actions))
+    if only_problems:
+        where.append("a.result <> 'SUCCESS'")
+    if result in (SUCCESS, DENIED, FAILURE):
+        where.append("a.result = %s"); params.append(result)
+    if username:
+        where.append("a.username ILIKE %s ESCAPE '\\'")
+        params.append("%" + username.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    limit, offset = max(1, min(int(limit), 200)), max(0, int(offset))
+    total = _fetch(f"SELECT count(*) AS n FROM audit_log a {clause}", params)[0]["n"]
+    rows = _fetch(
+        "SELECT a.id, a.ts, a.user_id, a.username, a.action, a.document_id, "
+        "a.target_user_id, a.result, a.ip_address, a.details, "
+        "t.username AS target_username, d.original_name AS document_name "
+        "FROM audit_log a "
+        "LEFT JOIN users t ON t.id = a.target_user_id "
+        "LEFT JOIN documents d ON d.id = a.document_id "
+        f"{clause} ORDER BY a.id DESC LIMIT %s OFFSET %s", params + [limit, offset])
+    return rows, total
+
+
+def activity_summary(hours=24):
+    """Admin overview counters for the last `hours` hours."""
+    rows = _fetch(
+        """SELECT count(*) AS events,
+                  count(*) FILTER (WHERE action = %s AND result = 'FAILURE') AS failed_logins,
+                  count(*) FILTER (WHERE result = 'DENIED') AS denied,
+                  count(*) FILTER (WHERE action = %s) AS csrf,
+                  count(*) FILTER (WHERE action = ANY(%s) AND result = 'SUCCESS') AS doc_events
+           FROM audit_log WHERE ts > now() - make_interval(hours => %s)""",
+        (LOGIN, CSRF_FAILURE, list(DOCUMENT_ACTIONS), int(hours)))
+    return rows[0]
 
 
 def get_document_history(document_id, limit=200):

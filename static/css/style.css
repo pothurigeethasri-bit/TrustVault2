@@ -158,3 +158,14 @@ h1, h2, h3 { letter-spacing: -.02em; font-weight: 800; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 main > * { animation: rise .35s ease both; }
 @media (prefers-reduced-motion: reduce) { main > * { animation: none; } .btn, .icon-btn { transition: none; } }
+
+/* ---------- admin console ---------- */
+.admin-tabs { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .4rem; margin-bottom: 1.2rem; }
+.admin-tab { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; padding: .45rem .95rem;
+  border-radius: 999px; border: 1px solid var(--tv-border); background: var(--tv-surface); color: var(--tv-muted);
+  font-weight: 700; font-size: .85rem; transition: background .15s, color .15s, border-color .15s; }
+.admin-tab:hover { color: var(--tv-text); border-color: var(--tv-accent); }
+.admin-tab.active { background: var(--tv-accent); border-color: var(--tv-accent); color: var(--tv-accent-ink); }
+.admin-tab:focus-visible { outline: 2px solid var(--tv-accent); outline-offset: 2px; }
+.text-bad { color: var(--tv-bad); }
+.role-select { min-width: 7.2rem; padding-right: 2rem; }
