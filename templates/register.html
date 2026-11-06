@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Register - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-card card shadow-sm mx-auto">
+  <div class="card-body p-4">
+    <h1 class="h4 mb-1">Create account</h1>
+    <p class="text-muted small">New accounts are Viewers. An administrator can change your role.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label class="form-label" for="username">Username</label>
+        <input class="form-control" id="username" name="username" required minlength="3" maxlength="30"
+               pattern="[A-Za-z0-9_.\-]+" autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="password">Password</label>
+        <input class="form-control" id="password" name="password" type="password" required minlength="10" maxlength="128">
+        <div class="form-text">At least 10 characters with a letter and a number. Avoid common passwords and your username.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="confirm">Confirm password</label>
+        <input class="form-control" id="confirm" name="confirm" type="password" required minlength="10" maxlength="128">
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Register</button>
+    </form>
+    <p class="small mt-3 mb-0">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+  </div>
+</div>
+{% endblock %}
