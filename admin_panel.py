@@ -7,7 +7,7 @@ from flask import (Blueprint, flash, g, redirect, render_template, request,
                    url_for)
 
 import audit
-from auth import get_user_by_id, role_required
+from auth import generate_temp_password, get_user_by_id, role_required, set_password
 from database import execute, fetch_all
 
 admin_bp = Blueprint("adminp", __name__)
@@ -19,14 +19,16 @@ ALL_ACTIONS = (
     audit.DOWNLOAD, audit.EDIT, audit.DELETE_DOC, audit.GRANT, audit.REVOKE,
     audit.ROLE_CHANGE, audit.DEACTIVATE_USER, audit.ACTIVATE_USER,
     audit.CREATE_CATEGORY, audit.VALIDATION_FAIL, audit.ACCESS_DENIED,
-    audit.CSRF_FAILURE, audit.INTEGRITY_CHECK,
+    audit.CSRF_FAILURE, audit.INTEGRITY_CHECK, audit.PIN_ATTEMPT,
+    audit.PASSWORD_CHANGE, audit.PASSWORD_RESET_ADMIN, audit.PASSWORD_RESET_REQUEST,
+    audit.THROTTLED,
 )
 
 
 # --------------------------------------------------------------- DB functions
 def list_users():
     return fetch_all(
-        "SELECT u.id, u.username, u.role, u.is_active, u.created_at, "
+        "SELECT u.id, u.username, u.role, u.is_active, u.created_at, u.reset_requested_at, "
         "  (SELECT count(*) FROM documents d WHERE d.owner_id = u.id) AS docs_owned, "
         "  (SELECT count(*) FROM permissions p WHERE p.user_id = u.id) AS docs_shared "
         "FROM users u ORDER BY u.username")
@@ -176,6 +178,28 @@ def change_active(user_id):
     flash(f"{target['username']} has been {'reactivated' if want_active else 'deactivated and signed out'}.",
           "success")
     return redirect(url_for("adminp.users"))
+
+
+@admin_bp.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
+@role_required("admin")
+def reset_password(user_id):
+    """Issue a one-time temporary password. It is shown ONCE on this response, is never stored in
+    readable form (only its hash) and never written to the audit log. The user must change it at
+    next sign-in, every older session of theirs is ended, and any lockout is cleared."""
+    ip = audit.client_ip(request)
+    target = get_user_by_id(user_id)
+    if target is None:
+        return _reject(audit.PASSWORD_RESET_ADMIN, None, "No such user.", ip)
+    if target["id"] == g.user["id"]:
+        return _reject(audit.PASSWORD_RESET_ADMIN, target,
+                       "Use 'Change password' for your own account.", ip)
+    temp = generate_temp_password()
+    set_password(target["id"], temp, must_change=True)
+    audit.log_event(audit.PASSWORD_RESET_ADMIN, audit.SUCCESS, user=g.user,
+                    target_user_id=target["id"], ip_address=ip,
+                    details=f"temporary password issued for {target['username']}")
+    return render_template("admin_users.html", users=list_users(), roles=ROLES,
+                           temp=(target["username"], temp))
 
 
 @admin_bp.route("/admin/integrity", methods=["POST"])

@@ -1,4 +1,4 @@
-# Render Blueprint: New + > Blueprint, pick this repo. You only have to type SEED_PASSWORD.
+# Render Blueprint: New + > Blueprint, pick this repo. You only have to type SEED_PASSWORD and ACCESS_PIN.
 databases:
   - name: trustvault-db
     plan: free
@@ -13,7 +13,7 @@ services:
     buildCommand: pip install -r requirements.txt
     # setup_db.py is idempotent: creates tables if missing, seeds the demo users if missing.
     startCommand: python setup_db.py && gunicorn app:app --workers 2 --timeout 60 --access-logfile -
-    healthCheckPath: /login
+    healthCheckPath: /healthz      # open even while the PIN gate is on
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
@@ -24,6 +24,8 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: SEED_PASSWORD          # password for the demo accounts; set it in the dashboard
+        sync: false
+      - key: ACCESS_PIN             # security PIN every visitor must enter before login/register
         sync: false
       - key: STORAGE_BACKEND        # Render's disk is wiped on every deploy, so keep files in Postgres
         value: db

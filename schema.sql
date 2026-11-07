@@ -46,3 +46,8 @@ CREATE TABLE IF NOT EXISTS file_blobs (
 
 CREATE INDEX IF NOT EXISTS idx_docs_owner ON documents (owner_id);
 CREATE INDEX IF NOT EXISTS idx_perm_user  ON permissions (user_id);
+
+-- Password reset support (idempotent, safe to re-run on an existing database).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;   -- bump = all sessions die
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested_at TIMESTAMPTZ;

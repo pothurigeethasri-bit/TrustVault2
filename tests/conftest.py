@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 import tempfile
+import random
 import uuid
 import zipfile
 from pathlib import Path
@@ -30,6 +31,7 @@ if TEST_URL:
     os.environ["SECRET_KEY"] = "test-secret-key-for-pytest-only-0123456789"
     os.environ["COOKIE_SECURE"] = "0"
     os.environ["TRUST_PROXY"] = "0"
+    os.environ["ACCESS_PIN"] = ""        # gate is OFF by default; test_pin_gate.py switches it on
     os.environ.setdefault("STORAGE_BACKEND", "disk")
     _upload_dir = tempfile.mkdtemp(prefix="tv-test-uploads-")
     os.environ["UPLOAD_DIR"] = _upload_dir
@@ -70,7 +72,9 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    c = app.test_client()
+    c.environ_base["REMOTE_ADDR"] = "10.{}.{}.{}".format(*(random.randint(1, 254) for _ in range(3)))
+    return c
 
 
 def _unique(prefix):
@@ -92,8 +96,12 @@ def make_user(app):
 class Browser:
     """A logged-in (or anonymous) test client that handles CSRF tokens for us."""
 
-    def __init__(self, app, user=None):
+    def __init__(self, app, user=None, ip=None):
         self.c = app.test_client()
+        # Every browser gets its own client IP, otherwise the per-IP throttles would make
+        # unrelated tests interfere with each other (they all come from 127.0.0.1).
+        self.ip = ip or "10.{}.{}.{}".format(*(random.randint(1, 254) for _ in range(3)))
+        self.c.environ_base["REMOTE_ADDR"] = self.ip
         self.user = user
         if user:
             r = self.login(user["username"], PASSWORD)
@@ -119,8 +127,8 @@ class Browser:
 
 @pytest.fixture()
 def browser(app):
-    def make(user=None):
-        return Browser(app, user)
+    def make(user=None, ip=None):
+        return Browser(app, user, ip)
     return make
 
 

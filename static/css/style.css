@@ -1,26 +1,27 @@
 /* TrustVault theme: Spotify-inspired, dark + light, built on Bootstrap 5.3 */
 :root {
-  --tv-font: Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
-  --tv-radius: 16px;
-  --tv-grad: linear-gradient(135deg, #1ed760 0%, #12c2a4 45%, #7b61ff 100%);
+  /* Spotify-style: near-black canvas, #1DB954 green, pill buttons, circular avatars */
+  --tv-font: "Circular Std", "Circular", Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --tv-radius: 10px;
+  --tv-grad: #1db954;
 }
 [data-bs-theme="dark"] {
-  --tv-bg: #0d0e12;  --tv-surface: #16181e;  --tv-surface-2: #1f222a;
-  --tv-border: rgba(255, 255, 255, .09);
-  --tv-text: #f3f4f6;  --tv-muted: #9ca3b0;
-  --tv-accent: #1ed760;  --tv-accent-hover: #4be37f;  --tv-accent-ink: #04140a;
-  --tv-ok: #1ed760;  --tv-warn: #ffb020;  --tv-bad: #ff5d6c;  --tv-info: #5ab0ff;  --tv-violet: #9b8cff;
-  --tv-shadow: 0 12px 32px rgba(0, 0, 0, .45);
-  --tv-glow1: rgba(30, 215, 96, .16);  --tv-glow2: rgba(123, 97, 255, .18);
+  --tv-bg: #121212;  --tv-surface: #181818;  --tv-surface-2: #282828;
+  --tv-border: rgba(255, 255, 255, .08);
+  --tv-text: #ffffff;  --tv-muted: #b3b3b3;
+  --tv-accent: #1db954;  --tv-accent-hover: #1ed760;  --tv-accent-ink: #000000;
+  --tv-ok: #1ed760;  --tv-warn: #ffa42b;  --tv-bad: #f3727f;  --tv-info: #509bf5;  --tv-violet: #b49bc8;
+  --tv-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  --tv-glow1: rgba(29, 185, 84, .22);  --tv-glow2: rgba(29, 185, 84, 0);
 }
 [data-bs-theme="light"] {
-  --tv-bg: #f4f6fb;  --tv-surface: #ffffff;  --tv-surface-2: #eef1f7;
-  --tv-border: rgba(15, 23, 42, .10);
-  --tv-text: #10131a;  --tv-muted: #5b6475;
-  --tv-accent: #1db954;  --tv-accent-hover: #17a44a;  --tv-accent-ink: #04140a;
-  --tv-ok: #0f8a3c;  --tv-warn: #a85f00;  --tv-bad: #c8283a;  --tv-info: #1c64c4;  --tv-violet: #5a45e0;
-  --tv-shadow: 0 12px 32px rgba(20, 30, 60, .10);
-  --tv-glow1: rgba(30, 215, 96, .14);  --tv-glow2: rgba(123, 97, 255, .12);
+  --tv-bg: #f6f6f6;  --tv-surface: #ffffff;  --tv-surface-2: #ececec;
+  --tv-border: rgba(0, 0, 0, .10);
+  --tv-text: #121212;  --tv-muted: #5f5f5f;
+  --tv-accent: #1db954;  --tv-accent-hover: #169c46;  --tv-accent-ink: #000000;
+  --tv-ok: #0f7a38;  --tv-warn: #9a5800;  --tv-bad: #c8283a;  --tv-info: #1c64c4;  --tv-violet: #6d4a8a;
+  --tv-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+  --tv-glow1: rgba(29, 185, 84, .16);  --tv-glow2: rgba(29, 185, 84, 0);
 }
 [data-bs-theme] {
   --bs-body-bg: var(--tv-bg);  --bs-body-color: var(--tv-text);
@@ -31,9 +32,8 @@
 body {
   font-family: var(--tv-font);
   background-color: var(--tv-bg);
-  background-image:
-    radial-gradient(900px 520px at 8% -10%, var(--tv-glow1), transparent 60%),
-    radial-gradient(800px 520px at 100% 0%, var(--tv-glow2), transparent 60%);
+  background-image: linear-gradient(180deg, var(--tv-glow1) 0, transparent 340px);
+  background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--tv-text);
   min-height: 100vh;
@@ -55,7 +55,7 @@ h1, h2, h3 { letter-spacing: -.02em; font-weight: 800; }
 .brand { display: flex; align-items: center; gap: .6rem; font-weight: 800; font-size: 1.2rem;
          color: var(--tv-text); letter-spacing: -.02em; }
 .brand:hover { color: var(--tv-text); }
-.brand-mark { width: 36px; height: 36px; border-radius: 11px; background: var(--tv-grad);
+.brand-mark { width: 36px; height: 36px; border-radius: 50%; background: var(--tv-grad);
               display: grid; place-items: center; color: #04140a; }
 .icon-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--tv-border);
             background: var(--tv-surface); color: var(--tv-text); display: grid; place-items: center;
@@ -73,8 +73,9 @@ h1, h2, h3 { letter-spacing: -.02em; font-weight: 800; }
 
 /* ---------- buttons ---------- */
 .btn { border-radius: 999px; font-weight: 700; transition: transform .15s, background .15s, border-color .15s; }
-.btn-tv { background: var(--tv-accent); color: var(--tv-accent-ink); border: 0; padding: .6rem 1.4rem; }
-.btn-tv:hover, .btn-tv:focus { background: var(--tv-accent-hover); color: var(--tv-accent-ink); transform: translateY(-1px); }
+.btn-tv { background: var(--tv-accent); color: var(--tv-accent-ink); border: 0; padding: .6rem 1.6rem;
+          font-weight: 800; letter-spacing: .02em; }
+.btn-tv:hover, .btn-tv:focus { background: var(--tv-accent-hover); color: var(--tv-accent-ink); transform: scale(1.03); }
 .btn-ghost { background: transparent; color: var(--tv-text); border: 1px solid var(--tv-border); font-weight: 600; }
 .btn-ghost:hover { background: var(--tv-surface-2); border-color: var(--tv-accent); color: var(--tv-text); }
 .btn-danger-soft { background: transparent; color: var(--tv-bad); border: 1px solid color-mix(in srgb, var(--tv-bad) 40%, transparent); }
@@ -95,12 +96,12 @@ h1, h2, h3 { letter-spacing: -.02em; font-weight: 800; }
 .stat-label { color: var(--tv-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
 .page-head { margin-bottom: 1.4rem; }
 .page-head h1 { font-size: clamp(1.7rem, 3vw, 2.3rem); margin: 0; }
-.gradient-text { background: var(--tv-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.accent-text { color: var(--tv-accent); }
 
 /* ---------- forms ---------- */
 .form-label { font-weight: 600; font-size: .85rem; color: var(--tv-muted); }
 .form-control, .form-select { background-color: var(--tv-surface-2); border: 1px solid var(--tv-border);
-  color: var(--tv-text); border-radius: 12px; padding: .62rem .9rem; }
+  color: var(--tv-text); border-radius: 6px; padding: .62rem .9rem; }
 .form-control::placeholder { color: var(--tv-muted); opacity: .8; }
 .form-control:focus, .form-select:focus { background-color: var(--tv-surface-2); color: var(--tv-text);
   border-color: var(--tv-accent); box-shadow: 0 0 0 .22rem color-mix(in srgb, var(--tv-accent) 25%, transparent); }
@@ -147,7 +148,7 @@ h1, h2, h3 { letter-spacing: -.02em; font-weight: 800; }
 /* ---------- auth + error pages ---------- */
 .auth-wrap { min-height: calc(100vh - 220px); display: grid; place-items: center; }
 .auth-card { width: 100%; max-width: 440px; padding: 2.1rem; }
-.auth-icon { width: 54px; height: 54px; border-radius: 16px; background: var(--tv-grad); color: #04140a;
+.auth-icon { width: 54px; height: 54px; border-radius: 50%; background: var(--tv-grad); color: #04140a;
              display: grid; place-items: center; margin-bottom: 1rem; }
 .error-code { font-size: clamp(4rem, 14vw, 8rem); font-weight: 900; line-height: 1; }
 
@@ -169,3 +170,10 @@ main > * { animation: rise .35s ease both; }
 .admin-tab:focus-visible { outline: 2px solid var(--tv-accent); outline-offset: 2px; }
 .text-bad { color: var(--tv-bad); }
 .role-select { min-width: 7.2rem; padding-right: 2rem; }
+
+/* ---------- Spotify touches ---------- */
+.tv-table tbody tr:hover { background: var(--tv-surface-2); }
+.tv-card { transition: background .2s; }
+.pin-input { text-align: center; font-size: 1.5rem; letter-spacing: .5em; font-weight: 800; }
+.temp-pw-code { font-size: 1.15rem; font-weight: 800; letter-spacing: .08em; user-select: all;
+                background: var(--tv-surface-2); padding: .15rem .6rem; border-radius: 6px; margin-left: .4rem; }

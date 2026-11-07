@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Security PIN - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="tv-card auth-card">
+    <div class="auth-icon">{{ icon('lock', 26) }}</div>
+    <h1 class="h3 mb-1">Enter the <span class="accent-text">security PIN</span></h1>
+    <p class="text-muted mb-4">This vault is private. Ask the person who shared the link for the PIN. Sign-in and registration unlock once it is entered.</p>
+    <form method="post" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-4">
+        <label class="form-label" for="pin">Security PIN</label>
+        <input class="form-control pin-input" id="pin" name="pin" type="password" required maxlength="128"
+               autofocus autocomplete="off" inputmode="text" spellcheck="false">
+      </div>
+      <button class="btn btn-tv w-100" type="submit">Continue</button>
+    </form>
+    <p class="small text-muted mt-4 mb-0 text-center">Every attempt is logged. Repeated wrong PINs lock your network out for a while.</p>
+  </div>
+</div>
+{% endblock %}

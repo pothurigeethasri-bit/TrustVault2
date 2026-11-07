@@ -1,6 +1,6 @@
 # TrustVault — Secure Document Sharing with a Real Audit Trail
 
-Flask + PostgreSQL app with three roles (Admin, Document Owner, Viewer), server-side permission
+Flask + PostgreSQL app with a security-PIN gate, IP + username throttling, password reset, three roles (Admin, Document Owner, Viewer), server-side permission
 checks on every file request, immediate revocation, and a tamper-evident, append-only audit log.
 
 ## Roles
@@ -14,7 +14,7 @@ checks on every file request, immediate revocation, and a tamper-evident, append
 1. `python -m venv venv && source venv/bin/activate` (Windows: `venv\Scripts\activate`)
 2. `pip install -r requirements.txt`
 3. Create a PostgreSQL database named `trustvault`.
-4. Copy `.env.example` to `.env` and fill in the values (a long random `SECRET_KEY` is required).
+4. Copy `.env.example` to `.env` (set `ACCESS_PIN` to try the PIN gate locally) and fill in the values (a long random `SECRET_KEY` is required).
 5. `python setup_db.py` creates the tables and the demo users.
 6. `python app.py`, then open http://127.0.0.1:5000
 
@@ -32,6 +32,9 @@ The security tests run the real app against a real PostgreSQL database.
 | `tests/test_access_control.py` | Unauthorised users and anonymous visitors are blocked, direct file URLs fail, revoke is immediate, viewers cannot edit/delete/share, CSRF, lockout, SQL injection, bad uploads |
 | `tests/test_audit.py` | Every action (including failures) is logged, audit rows cannot be changed or deleted, tampering is detected, the restricted DB role cannot touch the log |
 | `tests/test_admin.py` | Admin-only access, role changes and deactivation take effect at once and are logged, feeds and filters, XSS escaping |
+| `tests/test_pin_gate.py` | Login/register hidden until the PIN is entered, PIN throttling per IP, no open redirect, PIN rotation re-locks, production needs a PIN |
+| `tests/test_throttle.py` | Limits by username AND IP (login, register, reset requests, password change) |
+| `tests/test_password_reset.py` | User change, admin reset (one-time password, forced change, sessions ended, lockout cleared), forgot-password, audit |
 | `tests/test_storage.py` | The database file-storage backend, with the same permission checks |
 | `tests/test_validation.py`, `tests/test_passwords.py` | File validation and password rules |
 
@@ -53,10 +56,12 @@ Defined in `schema.sql` (created by `python setup_db.py`); the audit table and i
 - `audit_log`: database triggers block UPDATE/DELETE/TRUNCATE; each row is hash-chained; the admin console can re-verify the chain. `harden_db.py` optionally creates an app role that can only SELECT/INSERT on it.
 - Full threat list with the test for each defence: **[THREATS.md](THREATS.md)**.
 
+Full go-live and link-sharing guide: **[DEPLOY.md](DEPLOY.md)**. HTTP endpoints: **[API.md](API.md)**.
+
 ## Deploy to Render
 1. Push the repo to GitHub.
 2. In Render: **New + > Blueprint**, choose the repo. `render.yaml` creates the web service and a PostgreSQL database and sets the environment (including `STORAGE_BACKEND=db`, because Render's disk is wiped on each deploy).
-3. When asked, enter `SEED_PASSWORD` (the password for the demo accounts; use a strong one).
+3. When asked, enter `SEED_PASSWORD` (demo account password; strong) and `ACCESS_PIN` (the security PIN visitors must enter before login/register; required in production).
 4. After the first deploy, open the site URL and sign in as `admin`, `geetha` and `ravi` (one per role).
 5. Optional hardening: `OWNER_DATABASE_URL=<external DB url> APP_DB_PASSWORD=<long random> python harden_db.py`, then set the printed URL as `DATABASE_URL` and the owner URL as `SETUP_DATABASE_URL`.
 
@@ -67,4 +72,5 @@ Defined in `schema.sql` (created by `python setup_db.py`); the audit table and i
 - [x] Step 4: Permissions, grant and revoke
 - [x] Step 5: Admin dashboard (users and roles, activity, permission changes, security events, integrity check)
 - [x] Step 6: Security tests, THREATS.md, deployment config
-- [ ] Step 7: API documentation, demo video, write-up
+- [x] Step 7a: API docs (`API.md`), go-live guide (`DEPLOY.md`), PIN gate, IP + username throttling, password reset, Spotify theme
+- [ ] Step 7b: demo video, write-up

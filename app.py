@@ -10,6 +10,7 @@ import admin_panel
 import auth
 import documents
 import permissions
+import pin_gate
 import storage
 
 load_dotenv()
@@ -42,6 +43,8 @@ def create_app():
     if os.environ.get("TRUST_PROXY", "0") == "1":
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
+    pin_gate.validate_configuration(app.config["SESSION_COOKIE_SECURE"])
+    app.register_blueprint(pin_gate.pin_bp)      # FIRST: its before_request must run before auth's
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(documents.docs_bp)
     app.register_blueprint(permissions.perm_bp)

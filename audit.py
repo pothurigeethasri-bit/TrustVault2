@@ -35,10 +35,18 @@ CREATE_CATEGORY = "CREATE_CATEGORY"
 DEACTIVATE_USER = "DEACTIVATE_USER"
 ACTIVATE_USER = "ACTIVATE_USER"
 INTEGRITY_CHECK = "AUDIT_INTEGRITY_CHECK"
+PIN_ATTEMPT = "PIN_ATTEMPT"                  # security-PIN gate in front of login/register
+PASSWORD_CHANGE = "PASSWORD_CHANGE"          # user changes their own password
+PASSWORD_RESET_ADMIN = "PASSWORD_RESET_ADMIN"      # admin issues a temporary password
+PASSWORD_RESET_REQUEST = "PASSWORD_RESET_REQUEST"  # user asks an admin for a reset
+THROTTLED = "THROTTLED"                      # request refused by an IP rate limit
 
 # Which actions belong on which admin screen.
 DOCUMENT_ACTIONS = (UPLOAD, VIEW, DOWNLOAD, EDIT, DELETE_DOC)
-PERMISSION_ACTIONS = (GRANT, REVOKE, ROLE_CHANGE, DEACTIVATE_USER, ACTIVATE_USER)
+PERMISSION_ACTIONS = (GRANT, REVOKE, ROLE_CHANGE, DEACTIVATE_USER, ACTIVATE_USER,
+                      PASSWORD_RESET_ADMIN, PASSWORD_CHANGE)
+# Events that clear a username lockout (a successful reset gives a clean slate).
+RESET_ACTIONS = (PASSWORD_RESET_ADMIN, PASSWORD_CHANGE)
 
 SUCCESS, DENIED, FAILURE = "SUCCESS", "DENIED", "FAILURE"
 
@@ -278,15 +286,34 @@ def get_document_history(document_id, limit=200):
 
 def count_recent_failures(username, action, minutes):
     """Failed attempts for `username` in the last `minutes`, counted only
-    since their last success. Used for login lockout."""
+    since their last success or last password reset. Used for login lockout."""
     rows = _fetch(
         """SELECT count(*) AS n FROM audit_log
            WHERE action = %s AND username = %s AND result = 'FAILURE'
              AND ts > now() - make_interval(mins => %s)
-             AND ts > COALESCE((SELECT max(ts) FROM audit_log
-                                WHERE action = %s AND username = %s
-                                  AND result = 'SUCCESS'), '-infinity')""",
-        (action, username, int(minutes), action, username))
+             AND ts > GREATEST(
+                   COALESCE((SELECT max(ts) FROM audit_log
+                             WHERE action = %s AND username = %s
+                               AND result = 'SUCCESS'), '-infinity'),
+                   COALESCE((SELECT max(ts) FROM audit_log
+                             WHERE action = ANY(%s) AND result = 'SUCCESS'
+                               AND target_user_id = (SELECT id FROM users
+                                                     WHERE username = %s)), '-infinity'))""",
+        (action, username, int(minutes), action, username, list(RESET_ACTIONS), username))
+    return rows[0]["n"]
+
+
+def count_recent_by_ip(action, ip_address, minutes, results=("FAILURE", "DENIED")):
+    """How many `action` rows from this IP in the last `minutes` (default: only
+    failures and denials). Used for per-IP throttling. No row is ever edited:
+    the limit is computed from the append-only log itself."""
+    if not ip_address:
+        return 0
+    rows = _fetch(
+        """SELECT count(*) AS n FROM audit_log
+           WHERE action = %s AND ip_address = %s AND result = ANY(%s)
+             AND ts > now() - make_interval(mins => %s)""",
+        (action, ip_address, list(results), int(minutes)))
     return rows[0]["n"]
 
 
