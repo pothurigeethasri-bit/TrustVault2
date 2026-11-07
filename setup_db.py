@@ -8,11 +8,11 @@ from werkzeug.security import generate_password_hash
 from database import get_connection, init_db
 
 DEMO_USERS = [
-    ("admin", "admin"),
-    ("geetha", "owner"),
-    ("meena", "owner"),
-    ("ravi", "viewer"),
-    ("sita", "viewer"),
+    ("admin", "admin", "admin@trustvault.demo"),
+    ("geetha", "owner", "geetha@trustvault.demo"),
+    ("meena", "owner", "meena@trustvault.demo"),
+    ("ravi", "viewer", "ravi@trustvault.demo"),
+    ("sita", "viewer", "sita@trustvault.demo"),
 ]
 
 
@@ -21,11 +21,14 @@ def seed():
     conn = get_connection()
     try:
         with conn, conn.cursor() as cur:
-            for username, role in DEMO_USERS:
+            for username, role, email in DEMO_USERS:
+                # Existing demo accounts keep their password; they just gain an email if
+                # they did not have one, so they can sign in with it.
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, role) "
-                    "VALUES (%s, %s, %s) ON CONFLICT (username) DO NOTHING",
-                    (username, generate_password_hash(password), role),
+                    "INSERT INTO users (username, password_hash, role, email) "
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO UPDATE "
+                    "SET email = COALESCE(users.email, EXCLUDED.email)",
+                    (username, generate_password_hash(password), role, email),
                 )
     finally:
         conn.close()
@@ -38,4 +41,6 @@ if __name__ == "__main__":
         os.environ["DATABASE_URL"] = os.environ["SETUP_DATABASE_URL"]
     init_db()
     seed()
-    print("Database ready. Demo users: admin, geetha + meena (owners), ravi + sita (viewers).")
+    print("Database ready. Sign in with the email addresses below (password = SEED_PASSWORD):")
+    for username, role, email in DEMO_USERS:
+        print(f"  {email:28} {role}")

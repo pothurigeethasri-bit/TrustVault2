@@ -13,12 +13,10 @@ import storage
 from auth import login_required, role_required
 from database import execute, execute_returning, fetch_all, fetch_one
 from permissions import require_access
-from validation import MAX_NAME_LEN, ValidationError, validate_upload
+from validation import INLINE_TYPES, MAX_NAME_LEN, ValidationError, validate_upload
 from werkzeug.utils import secure_filename
 
 docs_bp = Blueprint("documents", __name__)
-
-INLINE_TYPES = {"application/pdf", "image/png", "image/jpeg", "text/plain"}
 
 
 # --------------------------------------------------------------- DB functions
@@ -45,7 +43,7 @@ def list_categories(owner_id):
 
 
 def get_category(category_id, owner_id):
-    return fetch_one("SELECT id FROM categories WHERE id = %s AND owner_id = %s",
+    return fetch_one("SELECT id, name FROM categories WHERE id = %s AND owner_id = %s",
                      (category_id, owner_id))
 
 
@@ -53,6 +51,10 @@ def create_category(owner_id, name):
     return execute_returning(
         "INSERT INTO categories (name, owner_id) VALUES (%s, %s) "
         "ON CONFLICT (owner_id, name) DO NOTHING RETURNING id", (name, owner_id))
+
+
+def set_document_category(doc_id, category_id):
+    execute("UPDATE documents SET category_id = %s WHERE id = %s", (category_id, doc_id))
 
 
 def _like(text):
@@ -89,7 +91,7 @@ def search_documents(user_id, q=None, category=None, owner=None,
     if role != "owner":                      # only the Owner role can edit or manage
         for r in rows:
             if r["access"] in ("edit", "owner"):
-                r["access"] = "read"
+                r["access"] = "download"
     return rows
 
 
@@ -170,7 +172,12 @@ def add_category():
 
 
 def _serve(doc_id, action, inline):
-    doc = require_access(doc_id, "read", action)       # aborts 403 + logs DENIED
+    # View needs "view"; download needs "download" - two separate permissions.
+    doc = require_access(doc_id, "view" if inline else "download", action)   # 403 + DENIED log
+    if inline and doc["mime_type"] not in INLINE_TYPES:
+        # The browser cannot preview this type, so "opening" it would hand over the whole
+        # file. That is a download, so it needs download rights.
+        doc = require_access(doc_id, "download", action)
     data = storage.load(doc["stored_name"])
     if data is None:
         audit.log_event(action, audit.FAILURE, user=g.user, document_id=doc_id,
@@ -193,6 +200,30 @@ def view_document(doc_id):
 @login_required
 def download_document(doc_id):
     return _serve(doc_id, audit.DOWNLOAD, inline=False)
+
+
+@docs_bp.route("/documents/<int:doc_id>/category", methods=["POST"])
+@login_required
+def change_category(doc_id):
+    """Owner re-files one of their documents under another category (or none)."""
+    doc = require_access(doc_id, "owner", audit.CATEGORY_CHANGE)
+    ip = audit.client_ip(request)
+    raw = request.form.get("category_id", "").strip()
+    category = None
+    if raw:
+        category = (get_category(int(raw), g.user["id"])
+                    if raw.isdigit() and len(raw) < 10 else None)
+        if category is None:
+            audit.log_event(audit.CATEGORY_CHANGE, audit.FAILURE, user=g.user, document_id=doc_id,
+                            ip_address=ip, details="invalid category")
+            flash("Invalid category.", "danger")
+            return redirect(url_for("owner"))
+    set_document_category(doc_id, category["id"] if category else None)
+    label = category["name"] if category else "no category"
+    audit.log_event(audit.CATEGORY_CHANGE, audit.SUCCESS, user=g.user, document_id=doc_id,
+                    ip_address=ip, details=f"{doc['original_name']} -> {label}")
+    flash(f"Moved {doc['original_name']} to {label}.", "success")
+    return redirect(url_for("owner"))
 
 
 @docs_bp.route("/documents/<int:doc_id>/delete", methods=["POST"])

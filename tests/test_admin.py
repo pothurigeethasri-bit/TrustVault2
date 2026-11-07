@@ -93,7 +93,7 @@ def test_feeds_show_the_right_events(admin, make_user, browser, upload_doc):
     geetha, ravi, sita = make_user("owner", "geetha"), make_user("viewer", "ravi"), make_user("viewer", "sita")
     g, r, s = browser(geetha), browser(ravi), browser(sita)
     doc_id, _ = upload_doc(g, name="Feed_Check.pdf")
-    g.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "read"})
+    g.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "download"})
     r.get(f"/documents/{doc_id}/download")
     s.get(f"/documents/{doc_id}/view")
     browser().login(sita["username"], "wrong-password-1")

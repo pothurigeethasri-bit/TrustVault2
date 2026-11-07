@@ -1,5 +1,6 @@
 """Upload validation: file name, type, size, and real content (magic bytes)."""
 import io
+import re
 import zipfile
 
 from werkzeug.utils import secure_filename
@@ -7,6 +8,19 @@ from werkzeug.utils import secure_filename
 
 class ValidationError(ValueError):
     pass
+
+
+# Files a browser can show inline. Only these can be shared as "view only"; every other
+# type can only be opened by downloading it.
+INLINE_TYPES = {"application/pdf", "image/png", "image/jpeg", "text/plain"}
+
+EMAIL_RE = re.compile(r"^[a-z0-9._%+\-]+@[a-z0-9\-]+(\.[a-z0-9\-]+)*\.[a-z]{2,}$")
+
+
+def normalise_email(raw):
+    """Lower-cased, trimmed e-mail address, or None if it is not a plausible address."""
+    email = (raw or "").strip().lower()
+    return email if len(email) <= 254 and EMAIL_RE.match(email) else None
 
 
 TYPES = {

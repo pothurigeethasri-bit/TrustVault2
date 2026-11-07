@@ -32,10 +32,14 @@ def test_registration_is_limited_per_ip(browser):
     b = browser()
     for _ in range(auth.MAX_REGISTRATIONS_PER_IP):
         name = "new" + os.urandom(4).hex()
-        assert b.post("/register", {"username": name, "password": PASSWORD, "confirm": PASSWORD}).status_code == 302
-    r = b.post("/register", {"username": "new" + os.urandom(4).hex(), "password": PASSWORD, "confirm": PASSWORD})
+        assert b.post("/register", {"username": name, "email": f"{name}@example.com",
+                                    "password": PASSWORD, "confirm": PASSWORD}).status_code == 302
+    extra = "new" + os.urandom(4).hex()
+    r = b.post("/register", {"username": extra, "email": f"{extra}@example.com",
+                             "password": PASSWORD, "confirm": PASSWORD})
     assert r.status_code == 429
-    assert browser().post("/register", {"username": "new" + os.urandom(4).hex(),
+    other = "new" + os.urandom(4).hex()
+    assert browser().post("/register", {"username": other, "email": f"{other}@example.com",
                                         "password": PASSWORD, "confirm": PASSWORD}).status_code == 302
 
 

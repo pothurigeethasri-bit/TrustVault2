@@ -21,7 +21,7 @@ def cast(make_user, browser):
             "g": browser(geetha), "r": browser(ravi), "s": browser(sita)}
 
 
-def grant(owner_b, doc_id, user, level="read"):
+def grant(owner_b, doc_id, user, level="download"):
     return owner_b.post(f"/documents/{doc_id}/grant", {"user_id": user["id"], "access_level": level})
 
 
@@ -71,7 +71,7 @@ def test_anonymous_is_redirected_from_every_protected_url(cast, upload_doc, brow
 def test_anonymous_cannot_post_actions(cast, upload_doc, browser):
     doc_id, _ = upload_doc(cast["g"])
     anon = browser()
-    for url, data in [(f"/documents/{doc_id}/grant", {"user_id": cast["sita"]["id"], "access_level": "read"}),
+    for url, data in [(f"/documents/{doc_id}/grant", {"user_id": cast["sita"]["id"], "access_level": "download"}),
                       (f"/documents/{doc_id}/delete", {}),
                       ("/documents/upload", {}), ("/admin/integrity", {})]:
         assert anon.post(url, data).status_code in (302, 403), url
@@ -118,7 +118,7 @@ def test_viewer_with_read_access_cannot_edit_delete_upload_or_share(cast, upload
     assert r.post("/documents/upload", {"file": (io.BytesIO(make_pdf()), "x.pdf")},
                   content_type="multipart/form-data").status_code == 403
     assert r.post(f"/documents/{doc_id}/grant", {"user_id": cast["sita"]["id"],
-                                                  "access_level": "read"}).status_code == 403
+                                                  "access_level": "download"}).status_code == 403
     assert r.post(f"/documents/{doc_id}/revoke", {"user_id": cast["ravi"]["id"]}).status_code == 403
     assert r.get(f"/documents/{doc_id}/share").status_code == 403
     row = database.fetch_one("SELECT original_name FROM documents WHERE id = %s", (doc_id,))
@@ -156,7 +156,7 @@ def test_owner_role_with_edit_access_can_edit_until_revoked(cast, make_user, bro
                               (doc_id,))["original_name"] == "Renamed.pdf"
     assert m.post(f"/documents/{doc_id}/delete").status_code == 403        # edit is not ownership
     assert m.post(f"/documents/{doc_id}/grant", {"user_id": cast["sita"]["id"],
-                                                  "access_level": "read"}).status_code == 403
+                                                  "access_level": "download"}).status_code == 403
     revoke(cast["g"], doc_id, meena)
     assert m.post(f"/documents/{doc_id}/edit", {"name": "Again.pdf"}).status_code == 403
 
@@ -168,7 +168,7 @@ def test_another_owner_cannot_touch_my_documents(cast, make_user, browser, uploa
     assert m.get(f"/documents/{doc_id}/view").status_code == 403
     assert m.get(f"/documents/{doc_id}/share").status_code == 403
     assert m.post(f"/documents/{doc_id}/delete").status_code == 403
-    assert m.post(f"/documents/{doc_id}/grant", {"user_id": meena["id"], "access_level": "read"}).status_code == 403
+    assert m.post(f"/documents/{doc_id}/grant", {"user_id": meena["id"], "access_level": "download"}).status_code == 403
     assert cast["g"].get(f"/documents/{doc_id}/download").data == content
 
 
@@ -203,7 +203,7 @@ def test_demoted_owner_loses_ownership_powers_immediately(cast, make_user, brows
     assert cast["g"].get(f"/documents/{doc_id}/share").status_code == 403
     assert cast["g"].post(f"/documents/{doc_id}/delete").status_code == 403
     assert cast["g"].post(f"/documents/{doc_id}/grant", {"user_id": cast["sita"]["id"],
-                                                          "access_level": "read"}).status_code == 403
+                                                          "access_level": "download"}).status_code == 403
     assert database.fetch_one("SELECT 1 AS x FROM documents WHERE id = %s", (doc_id,))
 
 
@@ -223,10 +223,10 @@ def test_deactivated_user_is_cut_off_on_the_next_request(cast, make_user, browse
 def test_state_changes_without_csrf_token_are_rejected_and_logged(cast, upload_doc, events):
     doc_id, _ = upload_doc(cast["g"])
     r = cast["g"].post(f"/documents/{doc_id}/grant",
-                       {"user_id": cast["sita"]["id"], "access_level": "read"}, csrf=False)
+                       {"user_id": cast["sita"]["id"], "access_level": "download"}, csrf=False)
     assert r.status_code == 400
     r = cast["g"].post(f"/documents/{doc_id}/grant",
-                       {"user_id": cast["sita"]["id"], "access_level": "read",
+                       {"user_id": cast["sita"]["id"], "access_level": "download",
                         "csrf_token": "forged"}, csrf=False)
     assert r.status_code == 400
     assert not database.fetch_one("SELECT 1 AS x FROM permissions WHERE document_id = %s", (doc_id,))
@@ -285,7 +285,8 @@ def test_unknown_user_and_bad_password_give_the_same_response(make_user, browser
 def test_registration_always_creates_a_viewer(browser):
     b = browser()
     name = "newbie" + os.urandom(3).hex()
-    r = b.post("/register", {"username": name, "password": PASSWORD, "confirm": PASSWORD,
+    r = b.post("/register", {"username": name, "email": f"{name}@example.com",
+                             "password": PASSWORD, "confirm": PASSWORD,
                              "role": "admin", "is_admin": "1"})
     assert r.status_code == 302
     assert database.fetch_one("SELECT role FROM users WHERE username = %s", (name,))["role"] == "viewer"

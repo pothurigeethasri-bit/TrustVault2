@@ -18,7 +18,7 @@ def test_every_step_of_the_brief_example_is_recorded(make_user, browser, upload_
     geetha, ravi, sita = make_user("owner", "geetha"), make_user("viewer", "ravi"), make_user("viewer", "sita")
     g, r, s = browser(geetha), browser(ravi), browser(sita)
     doc_id, _ = upload_doc(g)
-    g.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "read"})
+    g.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "download"})
     r.get(f"/documents/{doc_id}/view")
     r.get(f"/documents/{doc_id}/download")
     s.get(f"/documents/{doc_id}/view")
@@ -41,7 +41,8 @@ def test_failed_login_and_failed_registration_are_recorded(make_user, browser, e
     user = make_user("viewer")
     b = browser()
     b.login(user["username"], "wrong-password-1")
-    b.post("/register", {"username": user["username"], "password": PASSWORD, "confirm": PASSWORD})
+    b.post("/register", {"username": user["username"], "email": f"{user['username']}@example.com",
+                         "password": PASSWORD, "confirm": PASSWORD})
     got = rows_for(events, user["username"])
     assert ("LOGIN", "FAILURE") in got and ("REGISTER_USER", "FAILURE") in got
 

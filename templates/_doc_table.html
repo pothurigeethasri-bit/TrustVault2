@@ -15,18 +15,32 @@
         <div>
           <div class="doc-name">{{ d.original_name }}</div>
           {% if d.category %}<span class="pill pill-cat">{{ d.category }}</span>{% endif %}
+          {% if categories is defined and d.access == 'owner' %}
+          <form method="post" action="{{ url_for('documents.change_category', doc_id=d.id) }}" class="d-inline-flex gap-1 mt-1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select class="form-select form-select-sm" name="category_id" aria-label="Move {{ d.original_name }} to category">
+              <option value="">No category</option>
+              {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if c.name == d.category else '' }}>{{ c.name }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-ghost btn-sm" type="submit">Move</button>
+          </form>
+          {% endif %}
         </div>
       </div>
     </td>
     <td class="d-none d-md-table-cell">{{ d.owner }}</td>
     <td class="d-none d-md-table-cell">{{ d.size_bytes | filesize }}</td>
     <td class="d-none d-lg-table-cell">{{ d.uploaded_at | ist }}</td>
-    <td><span class="pill {{ {'owner':'pill-ok','edit':'pill-warn','read':'pill-info'}[d.access] }}">{{ d.access }}</span></td>
+    <td><span class="pill {{ {'owner':'pill-ok','edit':'pill-warn','download':'pill-info','view':'pill-cat'}[d.access] }}">{{ d.access | access_label }}</span></td>
     <td class="text-end text-nowrap">
       {% if d.mime_type in inline_types %}
       <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.view_document', doc_id=d.id) }}" target="_blank" rel="noopener">View</a>
       {% endif %}
+      {% if d.access in ('download', 'edit', 'owner') %}
       <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.download_document', doc_id=d.id) }}">Download</a>
+      {% elif d.mime_type not in inline_types %}
+      <span class="doc-sub">No preview</span>
+      {% endif %}
       {% if d.access in ('owner', 'edit') and g.user.role == 'owner' %}
       <a class="btn btn-ghost btn-sm" href="{{ url_for('documents.edit_document', doc_id=d.id) }}">Edit</a>
       {% endif %}

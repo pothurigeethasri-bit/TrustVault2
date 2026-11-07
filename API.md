@@ -25,14 +25,15 @@ There is no JSON API and no API token; authentication is the session cookie.
 |---|---|---|
 | `GET /healthz` | - | `200 ok` (monitoring; always open) |
 | `GET /pin` / `POST /pin` | `pin`, `csrf_token`; optional `?next=/path` (same-site paths only) | `302` to `next` or `/login`; `401` wrong PIN; `429` too many wrong PINs |
-| `GET/POST /login` | `username`, `password` | `302 -> /dashboard`; `401` same message for every cause; `429` throttled |
-| `GET/POST /register` | `username` (3-30 of `a-z0-9_.-`), `password`, `confirm` | `302 -> /login`; `400` invalid; `429`. Always creates a **viewer** |
-| `GET/POST /forgot-password` | `username` | `302 -> /login` with an identical message whether or not the account exists; `429` |
+| `GET/POST /login` | `email` (a legacy `username` is also accepted), `password` | `302 -> /dashboard`; `401` same message for every cause; `429` throttled |
+| `GET/POST /register` | `email`, `username` (display name, 3-30 of `a-z0-9_.-`), `password`, `confirm` | `302 -> /login`; `400` invalid; `429`. Always creates a **viewer** |
+| `GET/POST /forgot-password` | `email` (or legacy `username`) | `302 -> /login` with an identical message whether or not the account exists; `429` |
 
 ## Any signed-in user
 | Method & path | Parameters | Responses |
 |---|---|---|
 | `POST /logout` | - | `302 -> /login` |
+| `GET/POST /account/email` | `email`, `current` (password) | Signed in. `302` saved; `400` invalid or taken; `401` wrong password; `429` throttled. Audited as `CHANGE_EMAIL` |
 | `GET /dashboard` | - | `302` to `/admin`, `/owner` or `/viewer` by role |
 | `GET/POST /account/password` | `current`, `new`, `confirm` | `302` success (other sessions ended); `401` wrong current; `400` mismatch/same/weak; `429` |
 
@@ -44,18 +45,21 @@ After an admin reset, every route except this one and `/logout` redirects here u
 | `GET /owner`, `GET /viewer` | owner / viewer | `q`, `category`, `owner`, `date_from`, `date_to` (`YYYY-MM-DD`) | Search own / shared documents |
 | `POST /documents/upload` | owner | multipart `file`, optional `category_id` | Type, content, size checked; `302` or `400` |
 | `POST /categories` | owner | `name` | |
-| `GET /documents/<id>/view`, `/download` | read access | - | `200` file; `403` otherwise (missing and forbidden look identical) |
+| `GET /documents/<id>/view` | view access or higher | - | `200` file shown inline; `403` otherwise (missing and forbidden look identical). Types a browser cannot preview need download access |
+| `GET /documents/<id>/download` | download access or higher | - | `200` attachment; `403` for view-only users |
+| `POST /documents/<id>/category` | owner | `category_id` (blank = none) | Moves the document to one of the owner's own categories; audited as `CHANGE_CATEGORY` |
 | `GET/POST /documents/<id>/edit` | edit access | `name`, optional `file` | Owner or granted editor |
 | `POST /documents/<id>/delete` | owner | - | |
 | `GET /documents/<id>/share` | owner | - | Access list and per-document history |
-| `POST /documents/<id>/grant` | owner | `user_id`, `access_level` = `read`/`edit` | `edit` cannot be given to a viewer-role account |
+| `POST /documents/<id>/grant` | owner | `user_id`, `access_level` = `view`/`download`/`edit` | `edit` cannot be given to a viewer-role account; `view` only for previewable types |
 | `POST /documents/<id>/revoke` | owner | `user_id` | Takes effect on the very next request |
 
 ## Admin (all `admin` role only)
 | Method & path | Parameters | Notes |
 |---|---|---|
 | `GET /admin` | - | Overview and counters |
-| `GET /admin/users` | - | Users, roles, status, "reset requested" flags |
+| `GET /admin/alerts` | - | Locked accounts, IPs with repeated failures, latest failed sign-ins |
+| `GET /admin/users` | - | Users, emails, roles, status, "reset requested" flags |
 | `GET /admin/activity`, `/permissions`, `/security`, `/audit` | `user`, `result`, `action` (audit only), `page` | Filterable, paginated feeds (50/page) |
 | `POST /admin/users/<id>/role` | `role` | Not on yourself |
 | `POST /admin/users/<id>/active` | `active` = `1`/`0` | Not on yourself; deactivation signs the user out |
@@ -65,5 +69,5 @@ After an admin reset, every route except this one and `/logout` redirects here u
 ## Audit actions recorded
 `PIN_ATTEMPT`, `LOGIN`, `LOGOUT`, `REGISTER_USER`, `THROTTLED`, `PASSWORD_CHANGE`, `PASSWORD_RESET_REQUEST`, `PASSWORD_RESET_ADMIN`,
 `UPLOAD_DOCUMENT`, `VIEW_DOCUMENT`, `DOWNLOAD_DOCUMENT`, `EDIT_DOCUMENT`, `DELETE_DOCUMENT`, `GRANT_ACCESS`, `REVOKE_ACCESS`,
-`CHANGE_ROLE`, `DEACTIVATE_USER`, `ACTIVATE_USER`, `CREATE_CATEGORY`, `FILE_VALIDATION`, `ACCESS_DENIED`, `CSRF_FAILURE`, `AUDIT_INTEGRITY_CHECK`.
+`CHANGE_ROLE`, `CHANGE_CATEGORY`, `CHANGE_EMAIL`, `DEACTIVATE_USER`, `ACTIVATE_USER`, `CREATE_CATEGORY`, `FILE_VALIDATION`, `ACCESS_DENIED`, `CSRF_FAILURE`, `AUDIT_INTEGRITY_CHECK`.
 Each row has result `SUCCESS`/`DENIED`/`FAILURE`, IP address, and a hash chained to the previous row. PINs and passwords are never stored in it.

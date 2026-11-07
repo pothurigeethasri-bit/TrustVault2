@@ -30,7 +30,7 @@ def test_full_lifecycle_in_the_database_with_nothing_on_disk(db_storage, app, ma
 
     # Permission checks are identical with this backend.
     assert r.get(f"/documents/{doc_id}/download").status_code == 403
-    o.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "read"})
+    o.post(f"/documents/{doc_id}/grant", {"user_id": ravi["id"], "access_level": "download"})
     assert r.get(f"/documents/{doc_id}/download").data == content
     o.post(f"/documents/{doc_id}/revoke", {"user_id": ravi["id"]})
     assert r.get(f"/documents/{doc_id}/download").status_code == 403

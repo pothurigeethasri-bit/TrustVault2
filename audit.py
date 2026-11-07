@@ -40,11 +40,13 @@ PASSWORD_CHANGE = "PASSWORD_CHANGE"          # user changes their own password
 PASSWORD_RESET_ADMIN = "PASSWORD_RESET_ADMIN"      # admin issues a temporary password
 PASSWORD_RESET_REQUEST = "PASSWORD_RESET_REQUEST"  # user asks an admin for a reset
 THROTTLED = "THROTTLED"                      # request refused by an IP rate limit
+CATEGORY_CHANGE = "CHANGE_CATEGORY"          # owner moves a document to another category
+EMAIL_CHANGE = "CHANGE_EMAIL"                # user sets / changes their sign-in e-mail
 
 # Which actions belong on which admin screen.
-DOCUMENT_ACTIONS = (UPLOAD, VIEW, DOWNLOAD, EDIT, DELETE_DOC)
+DOCUMENT_ACTIONS = (UPLOAD, VIEW, DOWNLOAD, EDIT, DELETE_DOC, CATEGORY_CHANGE)
 PERMISSION_ACTIONS = (GRANT, REVOKE, ROLE_CHANGE, DEACTIVATE_USER, ACTIVATE_USER,
-                      PASSWORD_RESET_ADMIN, PASSWORD_CHANGE)
+                      PASSWORD_RESET_ADMIN, PASSWORD_CHANGE, EMAIL_CHANGE)
 # Events that clear a username lockout (a successful reset gives a clean slate).
 RESET_ACTIONS = (PASSWORD_RESET_ADMIN, PASSWORD_CHANGE)
 
@@ -315,6 +317,49 @@ def count_recent_by_ip(action, ip_address, minutes, results=("FAILURE", "DENIED"
              AND ts > now() - make_interval(mins => %s)""",
         (action, ip_address, list(results), int(minutes)))
     return rows[0]["n"]
+
+
+def recent_failed_logins(hours=24, limit=25):
+    """Newest failed sign-ins (wrong password, unknown account, inactive account, lockout)."""
+    return _fetch(
+        "SELECT id, ts, username, ip_address, result, details FROM audit_log "
+        "WHERE action = %s AND result <> 'SUCCESS' "
+        "AND ts > now() - make_interval(hours => %s) ORDER BY id DESC LIMIT %s",
+        (LOGIN, int(hours), max(1, min(int(limit), 200))))
+
+
+def failed_login_count(hours=24):
+    return _fetch(
+        "SELECT count(*) AS n FROM audit_log WHERE action = %s AND result = 'FAILURE' "
+        "AND ts > now() - make_interval(hours => %s)", (LOGIN, int(hours)))[0]["n"]
+
+
+def locked_out_accounts(max_failures, minutes):
+    """Accounts that are locked out RIGHT NOW: `max_failures` or more failed sign-ins within
+    the last `minutes`, counted exactly the way the login lockout counts them (since the
+    last success or password reset). Returns [{username, failures, last_ts}]."""
+    names = _fetch(
+        "SELECT username, max(ts) AS last_ts FROM audit_log "
+        "WHERE action = %s AND result = 'FAILURE' AND username <> 'anonymous' "
+        "AND ts > now() - make_interval(mins => %s) GROUP BY username", (LOGIN, int(minutes)))
+    locked = []
+    for row in names:
+        n = count_recent_failures(row["username"], LOGIN, minutes)
+        if n >= max_failures:
+            locked.append({"username": row["username"], "failures": n, "last_ts": row["last_ts"]})
+    return sorted(locked, key=lambda r: r["last_ts"], reverse=True)
+
+
+def suspicious_ips(min_failures, hours=24):
+    """IP addresses with `min_failures`+ failed sign-ins in the window (password spraying /
+    brute force). Returns [{ip_address, failures, accounts, last_ts}], worst first."""
+    return _fetch(
+        "SELECT ip_address, count(*) AS failures, count(DISTINCT username) AS accounts, "
+        "max(ts) AS last_ts FROM audit_log "
+        "WHERE action = %s AND result = 'FAILURE' AND ip_address IS NOT NULL "
+        "AND ts > now() - make_interval(hours => %s) "
+        "GROUP BY ip_address HAVING count(*) >= %s ORDER BY failures DESC, last_ts DESC LIMIT 20",
+        (LOGIN, int(hours), int(min_failures)))
 
 
 # --------------------------------------------------------------------------

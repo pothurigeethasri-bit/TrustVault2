@@ -10,9 +10,15 @@
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3">
-        <label class="form-label" for="username">Username</label>
+        <label class="form-label" for="email">Email</label>
+        <input class="form-control" id="email" name="email" type="email" required maxlength="254" autofocus autocomplete="email" placeholder="you@example.com">
+        <div class="form-text">You will sign in with this email.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="username">Display name</label>
         <input class="form-control" id="username" name="username" required minlength="3" maxlength="30"
-               pattern="[A-Za-z0-9_.\-]+" autofocus autocomplete="username">
+               pattern="[A-Za-z0-9_.\-]+" autocomplete="nickname">
+        <div class="form-text">3-30 characters: letters, numbers, . _ -</div>
       </div>
       <div class="mb-3">
         <label class="form-label" for="password">Password</label>

@@ -1,9 +1,10 @@
 """Access control: the central check, plus grant / revoke / share-page routes.
 
-Access levels: owner > edit > read.
-  * read  - view and download.
-  * edit  - also rename and replace the file. Only users with the Owner ROLE can
-            hold edit access; Viewer-role users are always capped at read.
+Access levels: owner > edit > download > view.
+  * view     - open the file in the browser only. No download.
+  * download - view and download.
+  * edit     - view, download, and also rename and replace the file. Only users with the
+               Owner ROLE can hold edit access; Viewer-role users are capped at download.
 Revoking deletes the permission row, so the very next request is refused.
 """
 from flask import (Blueprint, abort, flash, g, redirect, render_template,
@@ -12,9 +13,13 @@ from flask import (Blueprint, abort, flash, g, redirect, render_template,
 import audit
 from auth import get_user_by_id, login_required
 from database import execute_returning, fetch_all, fetch_one
+from validation import INLINE_TYPES
 
 perm_bp = Blueprint("permissions", __name__)
-RANK = {"read": 1, "edit": 2, "owner": 3}
+RANK = {"view": 1, "download": 2, "edit": 3, "owner": 4}
+GRANTABLE = ("view", "download", "edit")
+LABELS = {"view": "View only", "download": "View + download",
+          "edit": "View + download + edit", "owner": "Owner"}
 
 
 # --------------------------------------------------------------- DB functions
@@ -59,18 +64,18 @@ def delete_permission(doc_id, user_id):
 
 # ------------------------------------------------------------ the access check
 def access_level(user, doc):
-    """'owner', 'edit', 'read' or None. Looked up in the DB on every call."""
+    """'owner', 'edit', 'download', 'view' or None. Looked up in the DB on every call."""
     if user is None or doc is None:
         return None
     if doc["owner_id"] == user["id"]:
         # Ownership powers need the Owner ROLE. If an admin demotes someone, they
-        # lose the right to share/delete/edit at once (they can still read their file).
-        return "owner" if user["role"] == "owner" else "read"
+        # lose the right to share/delete/edit at once (they can still open their file).
+        return "owner" if user["role"] == "owner" else "download"
     if user["role"] == "admin":
         return None                       # admins manage the system, not document contents
     level = get_permission(doc["id"], user["id"])
     if level == "edit" and user["role"] != "owner":
-        return "read"                     # viewers can never edit
+        return "download"                 # viewers can never edit
     return level
 
 
@@ -101,21 +106,24 @@ def share_page(doc_id):
 @perm_bp.route("/documents/<int:doc_id>/grant", methods=["POST"])
 @login_required
 def grant(doc_id):
-    require_access(doc_id, "owner", audit.GRANT)
+    doc = require_access(doc_id, "owner", audit.GRANT)
     ip = audit.client_ip(request)
     raw = request.form.get("user_id", "")
     level = request.form.get("access_level", "")
     target = get_user_by_id(int(raw)) if raw.isdigit() else None
 
     error = None
-    if level not in ("read", "edit"):
-        error = "Choose read or edit access."
+    if level not in GRANTABLE:
+        error = "Choose view, download or edit access."
     elif target is None or not target["is_active"] or target["role"] == "admin":
         error = "Choose a valid user."
     elif target["id"] == g.user["id"]:
         error = "You already own this document."
     elif level == "edit" and target["role"] != "owner":
         error = "Edit access can only be given to users with the Owner role."
+    elif level == "view" and doc["mime_type"] not in INLINE_TYPES:
+        error = ("This file type cannot be previewed in the browser, so it cannot be shared "
+                 "as view-only. Choose download or edit access.")
 
     if error:
         audit.log_event(audit.GRANT, audit.FAILURE, user=g.user, document_id=doc_id,
@@ -128,7 +136,7 @@ def grant(doc_id):
     audit.log_event(audit.GRANT, audit.SUCCESS, user=g.user, document_id=doc_id,
                     target_user_id=target["id"], ip_address=ip,
                     details=f"{level} access to {target['username']}")
-    flash(f"{target['username']} now has {level} access.", "success")
+    flash(f"{target['username']} now has {LABELS[level].lower()} access.", "success")
     return redirect(url_for("permissions.share_page", doc_id=doc_id))
 
 

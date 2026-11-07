@@ -14,6 +14,7 @@ import audit
 import pin_gate
 from database import execute, execute_returning, get_connection
 from passwords import validate_password
+from validation import normalise_email
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -46,19 +47,32 @@ def get_user_by_username(username):
     return _query_one("SELECT * FROM users WHERE username = %s", (username,))
 
 
+def get_user_by_email(email):
+    return _query_one("SELECT * FROM users WHERE email = %s", (email,))
+
+
+def find_user(identifier):
+    """Resolve what someone typed into the sign-in box. An '@' means e-mail (usernames can
+    never contain one); anything else is treated as a legacy username so accounts that have
+    not added an e-mail yet can still sign in."""
+    if "@" in identifier:
+        return get_user_by_email(identifier)
+    return get_user_by_username(identifier)
+
+
 def get_user_by_id(user_id):
     return _query_one("SELECT * FROM users WHERE id = %s", (user_id,))
 
 
-def create_user(username, password, role="viewer"):
-    """Returns the new user id, or None if the username is taken."""
+def create_user(username, password, role="viewer", email=None):
+    """Returns the new user id, or None if the username (or e-mail) is already taken."""
     conn = get_connection()
     try:
         with conn, conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (username, password_hash, role) "
-                "VALUES (%s, %s, %s) RETURNING id",
-                (username, generate_password_hash(password), role))
+                "INSERT INTO users (username, password_hash, role, email) "
+                "VALUES (%s, %s, %s, %s) RETURNING id",
+                (username, generate_password_hash(password), role, email))
             return cur.fetchone()[0]
     except pg_errors.UniqueViolation:
         return None
@@ -179,9 +193,14 @@ def login():
     if request.method == "GET":
         return render_template("login.html")
 
-    username = request.form.get("username", "").strip().lower()[:150]
+    # The sign-in box is "Email". The field is still accepted as "username" for old clients.
+    identifier = (request.form.get("email") or request.form.get("username") or "").strip().lower()[:254]
     password = request.form.get("password", "")
     ip = audit.client_ip(request)
+    user = find_user(identifier)
+    # Lockout and audit rows are keyed by the account's username, so signing in with the
+    # e-mail or with the username counts against the SAME limit.
+    username = user["username"] if user else identifier[:150]
 
     if _throttled(audit.LOGIN, ip, LOCKOUT_MINUTES, MAX_FAILED_LOGINS_PER_IP, what=" (login)"):
         flash(f"Too many failed attempts from your network. Try again in {LOCKOUT_MINUTES} minutes.", "danger")
@@ -193,7 +212,6 @@ def login():
         flash(f"Too many failed attempts. Try again in {LOCKOUT_MINUTES} minutes.", "danger")
         return render_template("login.html"), 429
 
-    user = get_user_by_username(username)
     password_ok = check_password_hash(user["password_hash"] if user else _DUMMY_HASH, password)
 
     if user and password_ok and user["is_active"]:
@@ -202,12 +220,14 @@ def login():
         session["tv"] = user["token_version"]
         session.permanent = True
         audit.log_event(audit.LOGIN, audit.SUCCESS, user=user, ip_address=ip)
+        if not user["email"]:
+            flash("Add your email address (top right: Email) so you can sign in with it.", "info")
         return redirect(url_for("dashboard"))
 
     audit.log_event(audit.LOGIN, audit.FAILURE, user=user, username=username,
                     ip_address=ip,
                     details="inactive account" if user and password_ok else "bad credentials")
-    flash("Invalid username or password.", "danger")   # same message for every cause
+    flash("Invalid email or password.", "danger")   # same message for every cause
     return render_template("login.html"), 401
 
 
@@ -219,6 +239,8 @@ def register():
         return render_template("register.html")
 
     username = request.form.get("username", "").strip().lower()
+    raw_email = request.form.get("email", "")
+    email = normalise_email(raw_email)
     password = request.form.get("password", "")
     confirm = request.form.get("confirm", "")
     ip = audit.client_ip(request)
@@ -229,17 +251,22 @@ def register():
         return render_template("register.html"), 429
 
     error = None
-    if not USERNAME_RE.match(username):
+    if email is None:
+        error = "Enter a valid email address."
+    elif not USERNAME_RE.match(username):
         error = "Username must be 3-30 characters: letters, numbers, . _ -"
     elif password != confirm:
         error = "Passwords do not match."
+    elif get_user_by_email(email):
+        error = "That email is already registered."
     else:
         error = validate_password(password, username)
 
     # Self-registration ALWAYS creates a viewer. Roles are changed by admins only.
-    new_id = None if error else create_user(username, password, "viewer")
-    if not error and new_id is None:
-        error = "That username is already taken."
+    new_id = None if error else create_user(username, password, "viewer", email)
+    if not error and new_id is None:      # lost a race with another sign-up
+        error = ("That email is already registered." if get_user_by_email(email)
+                 else "That username is already taken.")
 
     if error:
         audit.log_event(audit.REGISTER, audit.FAILURE, username=username[:150],
@@ -310,21 +337,22 @@ def change_password():
 
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    """No e-mail in this system, so 'forgot' = ask an admin. The answer is identical whether
-    or not the account exists (no username enumeration)."""
+    """No outgoing mail in this system, so 'forgot' = ask an admin. The person types their
+    email (or legacy username). The answer is identical whether or not the account exists."""
     if g.user:
         return redirect(url_for("auth.change_password"))
     if request.method == "GET":
         return render_template("forgot_password.html")
 
     ip = audit.client_ip(request)
-    username = request.form.get("username", "").strip().lower()[:150]
+    identifier = (request.form.get("email") or request.form.get("username") or "").strip().lower()[:254]
+    username = identifier[:150]
     if _throttled(audit.PASSWORD_RESET_REQUEST, ip, 60, MAX_RESET_REQUESTS_PER_IP,
                   results=("SUCCESS", "FAILURE"), what=" (reset request)"):
         flash("Too many requests from your network. Try again later.", "danger")
         return render_template("forgot_password.html"), 429
 
-    user = get_user_by_username(username)
+    user = find_user(identifier)
     if user and user["is_active"]:
         execute("UPDATE users SET reset_requested_at = now() WHERE id = %s", (user["id"],))
         audit.log_event(audit.PASSWORD_RESET_REQUEST, audit.SUCCESS, user=user,
@@ -335,3 +363,46 @@ def forgot_password():
     flash("If that account exists, an administrator has been asked to reset it. "
           "They will give you a temporary password.", "info")
     return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/account/email", methods=["GET", "POST"])
+@login_required
+def change_email():
+    """Set or change the e-mail used to sign in. Needs the current password, because an
+    e-mail address is a login name."""
+    if request.method == "GET":
+        return render_template("change_email.html")
+
+    ip = audit.client_ip(request)
+    me = g.user
+
+    def refuse(message, status=400, note=None):
+        audit.log_event(audit.EMAIL_CHANGE, audit.FAILURE, user=me, target_user_id=me["id"],
+                        ip_address=ip, details=note or message)
+        flash(message, "danger")
+        return render_template("change_email.html"), status
+
+    if (_throttled(audit.EMAIL_CHANGE, ip, LOCKOUT_MINUTES, MAX_FAILED_LOGINS_PER_IP,
+                   what=" (email change)")
+            or audit.count_recent_failures(me["username"], audit.EMAIL_CHANGE,
+                                           LOCKOUT_MINUTES) >= MAX_FAILED_LOGINS):
+        flash(f"Too many failed attempts. Try again in {LOCKOUT_MINUTES} minutes.", "danger")
+        return render_template("change_email.html"), 429
+
+    if not check_password_hash(me["password_hash"], request.form.get("current", "")):
+        return refuse("Your current password is not correct.", 401, "wrong current password")
+    email = normalise_email(request.form.get("email", ""))
+    if email is None:
+        return refuse("Enter a valid email address.")
+    owner = get_user_by_email(email)
+    if owner and owner["id"] != me["id"]:
+        return refuse("That email is already registered.")
+
+    try:
+        execute("UPDATE users SET email = %s WHERE id = %s", (email, me["id"]))
+    except pg_errors.UniqueViolation:
+        return refuse("That email is already registered.")
+    audit.log_event(audit.EMAIL_CHANGE, audit.SUCCESS, user=me, target_user_id=me["id"],
+                    ip_address=ip, details=f"email set to {email}")
+    flash("Email saved. You can now sign in with it.", "success")
+    return redirect(url_for("dashboard"))

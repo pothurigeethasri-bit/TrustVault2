@@ -3,11 +3,14 @@
 Every route here is admin-only (role_required). Every state change is written to
 the audit trail, including rejected attempts.
 """
+import os
+
 from flask import (Blueprint, flash, g, redirect, render_template, request,
                    url_for)
 
 import audit
-from auth import generate_temp_password, get_user_by_id, role_required, set_password
+from auth import (LOCKOUT_MINUTES, MAX_FAILED_LOGINS, generate_temp_password,
+                  get_user_by_id, role_required, set_password)
 from database import execute, fetch_all
 
 admin_bp = Blueprint("adminp", __name__)
@@ -21,14 +24,20 @@ ALL_ACTIONS = (
     audit.CREATE_CATEGORY, audit.VALIDATION_FAIL, audit.ACCESS_DENIED,
     audit.CSRF_FAILURE, audit.INTEGRITY_CHECK, audit.PIN_ATTEMPT,
     audit.PASSWORD_CHANGE, audit.PASSWORD_RESET_ADMIN, audit.PASSWORD_RESET_REQUEST,
-    audit.THROTTLED,
+    audit.THROTTLED, audit.CATEGORY_CHANGE, audit.EMAIL_CHANGE,
 )
+
+# Alert thresholds (tunable in .env). Alerts are computed from the append-only audit log, so
+# they can never be switched off by editing data, and they need no extra table.
+ALERT_FAILED_LOGINS_24H = int(os.environ.get("ALERT_FAILED_LOGINS_24H", "5"))   # total, all accounts
+ALERT_IP_FAILURES_24H = int(os.environ.get("ALERT_IP_FAILURES_24H", "5"))        # from one address
+ALERT_WINDOW_HOURS = 24
 
 
 # --------------------------------------------------------------- DB functions
 def list_users():
     return fetch_all(
-        "SELECT u.id, u.username, u.role, u.is_active, u.created_at, u.reset_requested_at, "
+        "SELECT u.id, u.username, u.email, u.role, u.is_active, u.created_at, u.reset_requested_at, "
         "  (SELECT count(*) FROM documents d WHERE d.owner_id = u.id) AS docs_owned, "
         "  (SELECT count(*) FROM permissions p WHERE p.user_id = u.id) AS docs_shared "
         "FROM users u ORDER BY u.username")
@@ -44,6 +53,54 @@ def set_active(user_id, active):
 
 def _count(sql):
     return fetch_all(sql)[0]["n"]
+
+
+# --------------------------------------------------------------------- alerts
+def build_alerts():
+    """Everything an admin should look at now. Cached per request.
+    Returns {"alerts": [{level, title, detail}], "locked": [...], "ips": [...], "failed": [...]}"""
+    cached = g.get("_alerts")
+    if cached is not None:
+        return cached
+    locked = audit.locked_out_accounts(MAX_FAILED_LOGINS, LOCKOUT_MINUTES)
+    ips = audit.suspicious_ips(ALERT_IP_FAILURES_24H, ALERT_WINDOW_HOURS)
+    failed = audit.recent_failed_logins(ALERT_WINDOW_HOURS, limit=25)
+    failed_total = audit.failed_login_count(ALERT_WINDOW_HOURS)
+    pending = fetch_all("SELECT username FROM users WHERE reset_requested_at IS NOT NULL "
+                        "AND is_active ORDER BY reset_requested_at")
+
+    alerts = []
+    if locked:
+        names = ", ".join(r["username"] for r in locked[:5])
+        alerts.append({"level": "danger", "title": f"{len(locked)} account(s) locked out",
+                       "detail": f"{names} reached {MAX_FAILED_LOGINS} failed sign-ins in "
+                                 f"{LOCKOUT_MINUTES} minutes. This may be someone guessing a password."})
+    if ips:
+        top = ips[0]
+        alerts.append({"level": "danger", "title": f"{len(ips)} address(es) with repeated failed sign-ins",
+                       "detail": f"{top['ip_address']} failed {top['failures']} times "
+                                 f"across {top['accounts']} account name(s) in {ALERT_WINDOW_HOURS}h."})
+    if failed_total >= ALERT_FAILED_LOGINS_24H:
+        alerts.append({"level": "warning",
+                       "title": f"{failed_total} failed sign-ins in the last {ALERT_WINDOW_HOURS} hours",
+                       "detail": f"The alert threshold is {ALERT_FAILED_LOGINS_24H}."})
+    if pending:
+        alerts.append({"level": "info", "title": f"{len(pending)} password reset request(s) waiting",
+                       "detail": "Users: " + ", ".join(r["username"] for r in pending[:5]) + "."})
+
+    result = {"alerts": alerts, "locked": locked, "ips": ips, "failed": failed,
+              "failed_total": failed_total}
+    g._alerts = result
+    return result
+
+
+@admin_bp.app_context_processor
+def inject_alert_count():
+    """Number shown on the Alerts tab. Only computed on admin pages, for admins."""
+    ep = request.endpoint or ""
+    if g.get("user") and g.user["role"] == "admin" and (ep == "admin" or ep.startswith("adminp.")):
+        return {"alert_count": sum(1 for a in build_alerts()["alerts"] if a["level"] != "info")}
+    return {}
 
 
 # -------------------------------------------------------------------- helpers
@@ -94,13 +151,21 @@ def overview():
         "grants": _count("SELECT count(*) AS n FROM permissions"),
     }
     return render_template("admin_dashboard.html", stats=stats, summary=summary,
-                           recent=recent, last_check=last_check[0] if last_check else None)
+                           recent=recent, last_check=last_check[0] if last_check else None,
+                           alerts=build_alerts()["alerts"])
 
 
 @admin_bp.route("/admin/users")
 @role_required("admin")
 def users():
     return render_template("admin_users.html", users=list_users(), roles=ROLES)
+
+
+@admin_bp.route("/admin/alerts")
+@role_required("admin")
+def alerts():
+    return render_template("admin_alerts.html", **build_alerts(), lockout_minutes=LOCKOUT_MINUTES,
+                           max_failures=MAX_FAILED_LOGINS, window=ALERT_WINDOW_HOURS)
 
 
 @admin_bp.route("/admin/activity")

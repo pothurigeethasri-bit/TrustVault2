@@ -4,6 +4,7 @@
 {% block content %}
 {% set tabs = [
   ('admin', 'Overview', 'shield'),
+  ('adminp.alerts', 'Alerts', 'bell'),
   ('adminp.users', 'Users', 'users'),
   ('adminp.activity', 'Documents', 'file'),
   ('adminp.permission_changes', 'Permissions', 'key'),
@@ -12,7 +13,7 @@
 <nav class="admin-tabs" aria-label="Admin sections">
   {% for ep, label, ic in tabs %}
   <a href="{{ url_for(ep) }}" class="admin-tab{{ ' active' if request.endpoint == ep else '' }}"
-     {% if request.endpoint == ep %}aria-current="page"{% endif %}>{{ icon(ic, 16) }}<span>{{ label }}</span></a>
+     {% if request.endpoint == ep %}aria-current="page"{% endif %}>{{ icon(ic, 16) }}<span>{{ label }}</span>{% if ep == 'adminp.alerts' and alert_count %}<span class="pill pill-bad ms-1">{{ alert_count }}</span>{% endif %}</a>
   {% endfor %}
 </nav>
 {% block admin_content %}{% endblock %}

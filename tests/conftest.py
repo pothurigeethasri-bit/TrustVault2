@@ -87,9 +87,10 @@ def make_user(app):
 
     def make(role="viewer", prefix=None):
         name = _unique(prefix or role[:3])
-        uid = auth.create_user(name, PASSWORD, role)
+        email = f"{name}@example.com"
+        uid = auth.create_user(name, PASSWORD, role, email)
         assert uid
-        return {"id": uid, "username": name, "role": role}
+        return {"id": uid, "username": name, "role": role, "email": email}
     return make
 
 

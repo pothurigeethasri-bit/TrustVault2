@@ -26,6 +26,7 @@
         <span class="d-none d-sm-inline">{{ g.user.username }}</span>
         <span class="role-badge role-{{ g.user.role }}">{{ g.user.role }}</span>
       </div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.change_email') }}">Email</a>
       <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.change_password') }}">Password</a>
       <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

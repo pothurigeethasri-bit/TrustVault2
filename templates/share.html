@@ -20,8 +20,9 @@
       </select>
       <label class="form-label" for="access_level">Permission</label>
       <select class="form-select mb-3" id="access_level" name="access_level">
-        <option value="read">Read: view and download</option>
-        <option value="edit">Edit: also rename and replace (Owners only)</option>
+        <option value="view">View only: open in the browser, no download (PDF, images, text)</option>
+        <option value="download" selected>View and download</option>
+        <option value="edit">View, download and edit: also rename and replace (Owners only)</option>
       </select>
       <button class="btn btn-tv" type="submit">Grant access</button>
     </form>
@@ -35,7 +36,7 @@
       {% for p in permissions %}
       <tr>
         <td><div class="doc-name">{{ p.username }}</div><div class="doc-sub">{{ p.role }}</div></td>
-        <td><span class="pill {{ 'pill-warn' if p.access_level == 'edit' else 'pill-info' }}">{{ p.access_level }}</span></td>
+        <td><span class="pill {{ {'edit':'pill-warn','download':'pill-info','view':'pill-cat'}[p.access_level] }}">{{ p.access_level | access_label }}</span></td>
         <td>{{ p.granted_at | ist }}</td>
         <td class="text-end">
           <form method="post" action="{{ url_for('permissions.revoke', doc_id=doc.id) }}" class="d-inline" data-confirm="Revoke access for {{ p.username }}?">

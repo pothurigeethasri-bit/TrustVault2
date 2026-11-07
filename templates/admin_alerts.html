@@ -1,0 +1,67 @@
+{% extends "admin_base.html" %}
+{% from "_icons.html" import icon %}
+{% block admin_content %}
+<div class="page-head">
+  <h1>Security <span class="accent-text">alerts</span></h1>
+  <p class="text-muted mb-0">Failed sign-ins and lockouts, read live from the tamper-evident audit log (last {{ window }} hours).</p>
+</div>
+
+{% for a in alerts %}
+<div class="alert alert-{{ a.level }} d-flex align-items-start gap-2" role="alert">
+  <span class="flex-shrink-0">{{ icon('bell', 18) }}</span>
+  <div><strong>{{ a.title }}.</strong> {{ a.detail }}</div>
+</div>
+{% else %}
+<div class="alert alert-success" role="alert">No active alerts. Nothing needs your attention right now.</div>
+{% endfor %}
+
+<h2 class="h5 mt-4 mb-2">Accounts locked out now</h2>
+<p class="doc-sub">{{ max_failures }} failed sign-ins within {{ lockout_minutes }} minutes locks an account. A successful sign-in or an admin password reset clears it.</p>
+<div class="tv-card mb-4"><div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr><th>Account</th><th>Failed attempts</th><th>Last attempt (IST)</th></tr></thead>
+  <tbody>
+  {% for r in locked %}
+  <tr><td class="doc-name">{{ r.username }}</td><td><span class="pill pill-bad">{{ r.failures }}</span></td><td>{{ r.last_ts | ist(seconds=True) }}</td></tr>
+  {% else %}
+  <tr><td colspan="3"><div class="empty">{{ icon('lock', 38) }}<div>No account is locked out.</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+
+<h2 class="h5 mb-2">Addresses with repeated failures</h2>
+<div class="tv-card mb-4"><div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr><th>IP address</th><th>Failed sign-ins</th><th>Account names tried</th><th>Last attempt (IST)</th></tr></thead>
+  <tbody>
+  {% for r in ips %}
+  <tr><td class="doc-name">{{ r.ip_address }}</td><td><span class="pill pill-bad">{{ r.failures }}</span></td><td>{{ r.accounts }}</td><td>{{ r.last_ts | ist(seconds=True) }}</td></tr>
+  {% else %}
+  <tr><td colspan="4"><div class="empty">{{ icon('shield', 38) }}<div>No address is repeatedly failing.</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+
+<h2 class="h5 mb-2">Latest failed sign-ins ({{ failed_total }} in {{ window }}h)</h2>
+<div class="tv-card"><div class="tv-scroll">
+<table class="tv-table">
+  <thead><tr><th>Time (IST)</th><th>Account tried</th><th>IP</th><th>Result</th><th class="d-none d-md-table-cell">Details</th></tr></thead>
+  <tbody>
+  {% for e in failed %}
+  <tr>
+    <td class="text-nowrap">{{ e.ts | ist(seconds=True) }}</td>
+    <td class="doc-name">{{ e.username }}</td>
+    <td>{{ e.ip_address or '-' }}</td>
+    <td><span class="pill {{ 'pill-bad' if e.result == 'DENIED' else 'pill-warn' }}">{{ e.result }}</span></td>
+    <td class="d-none d-md-table-cell doc-sub">{{ e.details or '' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5"><div class="empty">{{ icon('activity', 38) }}<div>No failed sign-ins recorded.</div></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+<div class="mt-3"><a href="{{ url_for('adminp.security_events') }}" class="small">View all security events &rarr;</a></div>
+{% endblock %}

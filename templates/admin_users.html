@@ -16,7 +16,7 @@
 <div class="tv-card"><div class="tv-scroll">
 <table class="tv-table">
   <thead><tr>
-    <th>User</th><th>Role</th><th>Status</th>
+    <th>User</th><th class="d-none d-md-table-cell">Email</th><th>Role</th><th>Status</th>
     <th class="d-none d-md-table-cell">Owns</th><th class="d-none d-md-table-cell">Shared with</th>
     <th class="d-none d-lg-table-cell">Joined (IST)</th><th class="text-end">Manage</th>
   </tr></thead>
@@ -25,6 +25,7 @@
   <tr>
     <td class="text-nowrap"><div class="d-flex align-items-center gap-2"><span class="avatar">{{ u.username[0] }}</span>
       <span class="doc-name">{{ u.username }}</span>{% if u.id == g.user.id %}<span class="pill pill-cat">you</span>{% endif %}</div></td>
+    <td class="d-none d-md-table-cell">{{ u.email or '-' }}</td>
     <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td>
     <td><span class="pill {{ 'pill-ok' if u.is_active else 'pill-bad' }}">{{ 'active' if u.is_active else 'deactivated' }}</span>
       {% if u.reset_requested_at %}<span class="pill pill-warn" title="Requested {{ u.reset_requested_at | ist }} IST">reset requested</span>{% endif %}</td>

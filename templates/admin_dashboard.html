@@ -6,6 +6,18 @@
   <p class="text-muted mb-0">Signed in as {{ g.user.username }}. Users, documents and security activity at a glance.</p>
 </div>
 
+{% if alerts %}
+<div class="mb-3">
+  {% for a in alerts %}
+  <div class="alert alert-{{ a.level }} d-flex align-items-start gap-2" role="alert">
+    <span class="flex-shrink-0">{{ icon('bell', 18) }}</span>
+    <div><strong>{{ a.title }}.</strong> {{ a.detail }}</div>
+  </div>
+  {% endfor %}
+  <a href="{{ url_for('adminp.alerts') }}" class="small">Open the alerts page &rarr;</a>
+</div>
+{% endif %}
+
 <div class="row g-3 mb-3">
   {% for value, label, ic in [
     (stats.active ~ ' / ' ~ stats.users, 'Active users', 'users'),

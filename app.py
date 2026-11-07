@@ -62,6 +62,10 @@ def create_app():
             value = value.replace(tzinfo=timezone.utc)
         return value.astimezone(IST).strftime("%d %b %Y %H:%M:%S" if seconds else "%d %b %Y %H:%M")
 
+    @app.template_filter("access_label")
+    def access_label(level):
+        return permissions.LABELS.get(level, level)
+
     @app.template_filter("filetype")
     def filetype(mime):
         if mime == "application/pdf":
