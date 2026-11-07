@@ -85,3 +85,6 @@ Full go-live and link-sharing guide: **[DEPLOY.md](DEPLOY.md)**. HTTP endpoints:
 - **Separate permissions.** `view` (opens in the browser only; no Download button and `/download` is refused), `download` (view + download) and `edit` (view + download + rename/replace, Owner-role accounts only). Old `read` rows are migrated to `download` automatically by `schema.sql`. View-only is only offered for types a browser can preview (PDF, PNG, JPG, TXT).
 - **Organise documents.** Owners create categories and can move any of their documents to another category (or none) from the document list.
 - **Admin alerts.** *Admin > Alerts* (with a badge on the tab and banners on the Overview) shows accounts locked out right now, IP addresses with repeated failed sign-ins, the latest failed sign-ins and waiting password-reset requests. They are read from the audit log, so nothing extra to maintain. Thresholds: `ALERT_FAILED_LOGINS_24H` (default 5) and `ALERT_IP_FAILURES_24H` (default 5).
+## Known limitations
+- Email verification for new sign-ups does not work on the live site: Render's free plan blocks outgoing SMTP. It works locally (the link prints in the server console). Use the demo accounts on the live site.
+- The live site is on Render's free plan and sleeps when idle, so the first load can take up to a minute.
