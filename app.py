@@ -9,6 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import admin_panel
 import auth
 import documents
+import mailer
 import permissions
 import pin_gate
 import storage
@@ -44,6 +45,7 @@ def create_app():
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     pin_gate.validate_configuration(app.config["SESSION_COOKIE_SECURE"])
+    mailer.validate_configuration(app.config["SESSION_COOKIE_SECURE"])   # SMTP + APP_BASE_URL
     app.register_blueprint(pin_gate.pin_bp)      # FIRST: its before_request must run before auth's
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(documents.docs_bp)

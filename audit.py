@@ -42,6 +42,8 @@ PASSWORD_RESET_REQUEST = "PASSWORD_RESET_REQUEST"  # user asks an admin for a re
 THROTTLED = "THROTTLED"                      # request refused by an IP rate limit
 CATEGORY_CHANGE = "CHANGE_CATEGORY"          # owner moves a document to another category
 EMAIL_CHANGE = "CHANGE_EMAIL"                # user sets / changes their sign-in e-mail
+EMAIL_VERIFY_REQUEST = "EMAIL_VERIFY_REQUEST"  # a verification link was requested for an address
+EMAIL_VERIFIED = "EMAIL_VERIFIED"            # a link was used: the address is proven
 
 # Which actions belong on which admin screen.
 DOCUMENT_ACTIONS = (UPLOAD, VIEW, DOWNLOAD, EDIT, DELETE_DOC, CATEGORY_CHANGE)

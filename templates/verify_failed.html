@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Link problem - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="tv-card auth-card text-center">
+    <div class="auth-icon">{{ icon('lock', 26) }}</div>
+    <h1 class="h3 mb-2">Link <span class="accent-text">not valid</span></h1>
+    <p class="text-muted mb-4">{{ message }}</p>
+    <a class="btn btn-tv w-100" href="{{ url_for('auth.register') }}">Get a new link</a>
+    <p class="small text-muted mt-4 mb-0"><a href="{{ url_for('auth.login') }}">Sign in</a></p>
+  </div>
+</div>
+{% endblock %}

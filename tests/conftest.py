@@ -39,6 +39,40 @@ if TEST_URL:
 PASSWORD = "Zq7-test-passphrase-91"
 
 
+class Mailbox:
+    """Stands in for SMTP in database tests: nothing is ever sent, every message is kept."""
+
+    def __init__(self):
+        self.sent = []
+        self.fail = None            # set to a mailer.MailError to simulate a delivery failure
+
+    def __call__(self, to, subject, text, html=None):
+        if self.fail:
+            raise self.fail
+        self.sent.append({"to": to, "subject": subject, "text": text, "html": html})
+
+    def to(self, address):
+        return [m for m in self.sent if m["to"] == address]
+
+    def token_for(self, address):
+        """The token in the newest link e-mailed to `address` (None if there is none)."""
+        for m in reversed(self.sent):
+            if m["to"] == address:
+                found = re.search(r"token=([A-Za-z0-9_\-]+)", m["text"])
+                if found:
+                    return found.group(1)
+        return None
+
+
+@pytest.fixture(autouse=True)
+def mailbox(request, monkeypatch):
+    box = Mailbox()
+    if request.node.get_closest_marker("db"):
+        import mailer
+        monkeypatch.setattr(mailer, "send_mail", box)
+    return box
+
+
 def pytest_collection_modifyitems(config, items):
     if TEST_URL:
         return
@@ -92,6 +126,25 @@ def make_user(app):
         assert uid
         return {"id": uid, "username": name, "role": role, "email": email}
     return make
+
+
+@pytest.fixture()
+def sign_up(app, mailbox, browser):
+    """Do the whole verified sign-up through the real routes; returns the new account."""
+    import database
+
+    def go(email=None, username=None, password=PASSWORD):
+        email = email or f"{_unique('new')}@example.com"
+        username = username or _unique("usr")
+        b = browser()
+        assert b.post("/register", {"email": email}).status_code == 200
+        token = mailbox.token_for(email)
+        r = b.post("/register/complete", {"token": token, "username": username,
+                                          "password": password, "confirm": password})
+        assert r.status_code == 302, r.data
+        row = database.fetch_one("SELECT id FROM users WHERE username = %s", (username,))
+        return {"id": row["id"], "username": username, "email": email, "password": password}
+    return go
 
 
 class Browser:

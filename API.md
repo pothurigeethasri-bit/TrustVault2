@@ -16,7 +16,8 @@ There is no JSON API and no API token; authentication is the session cookie.
 | Wrong PIN | 5 / 15 min | IP |
 | Failed login | 5 / 15 min | username (cleared by a successful login or a password reset) |
 | Failed login | 10 / 15 min | IP (counts all usernames, never reset by a success) |
-| Registration | 5 / hour | IP |
+| Sign-up verification e-mails | 5 / hour | IP (`REGISTER_MAX_PER_IP_HOUR`) |
+| Verification links | 1 / 60 s and 5 / hour | e-mail address (`EMAIL_RESEND_COOLDOWN_SECONDS`, `EMAIL_MAX_LINKS_PER_HOUR`) |
 | Reset request | 5 / hour | IP |
 | Wrong current password on change | 5 / 15 min | username and IP |
 
@@ -26,14 +27,16 @@ There is no JSON API and no API token; authentication is the session cookie.
 | `GET /healthz` | - | `200 ok` (monitoring; always open) |
 | `GET /pin` / `POST /pin` | `pin`, `csrf_token`; optional `?next=/path` (same-site paths only) | `302` to `next` or `/login`; `401` wrong PIN; `429` too many wrong PINs |
 | `GET/POST /login` | `email` (a legacy `username` is also accepted), `password` | `302 -> /dashboard`; `401` same message for every cause; `429` throttled |
-| `GET/POST /register` | `email`, `username` (display name, 3-30 of `a-z0-9_.-`), `password`, `confirm` | `302 -> /login`; `400` invalid; `429`. Always creates a **viewer** |
+| `GET/POST /register` | `email` only | **Step 1 of sign-up.** `200` "check your email" page, identical whether or not the address already has an account (a registered address gets a notice mail, never a link); `400` invalid address or refused by the mail server; `429`; `503` mail could not be sent (no token is kept, retry at once) |
+| `GET/POST /register/complete` | `token` (from the e-mailed link); POST also `username` (3-30 of `a-z0-9_.-`), `password`, `confirm` | **Step 2.** `GET` shows the form and does *not* use the link up; `POST` redeems it and creates the **viewer** in one transaction: `302 -> /login`. `400` for an invalid, expired or already-used link, or a bad/taken username or weak password (the link stays valid for those). The link works once and expires after `EMAIL_TOKEN_MINUTES` (30) |
 | `GET/POST /forgot-password` | `email` (or legacy `username`) | `302 -> /login` with an identical message whether or not the account exists; `429` |
 
 ## Any signed-in user
 | Method & path | Parameters | Responses |
 |---|---|---|
 | `POST /logout` | - | `302 -> /login` |
-| `GET/POST /account/email` | `email`, `current` (password) | Signed in. `302` saved; `400` invalid or taken; `401` wrong password; `429` throttled. Audited as `CHANGE_EMAIL` |
+| `GET/POST /account/email` | `email`, `current` (password) | Signed in. `302` and a confirmation link is mailed to the NEW address (the address does not change yet); `400` invalid, taken or refused by the mail server; `401` wrong password; `429` throttled; `503` mail could not be sent |
+| `GET/POST /account/email/confirm` | `token` (from the e-mailed link) | Must be signed in as the same user. `GET` shows the new address and a button; `POST` applies it: `302 -> /dashboard`. Invalid/expired/used link, or a link issued to another account: `302 -> /account/email`. Audited as `EMAIL_VERIFIED` + `CHANGE_EMAIL` |
 | `GET /dashboard` | - | `302` to `/admin`, `/owner` or `/viewer` by role |
 | `GET/POST /account/password` | `current`, `new`, `confirm` | `302` success (other sessions ended); `401` wrong current; `400` mismatch/same/weak; `429` |
 
@@ -67,7 +70,7 @@ After an admin reset, every route except this one and `/logout` redirects here u
 | `POST /admin/integrity` | - | Re-verifies the whole hash chain |
 
 ## Audit actions recorded
-`PIN_ATTEMPT`, `LOGIN`, `LOGOUT`, `REGISTER_USER`, `THROTTLED`, `PASSWORD_CHANGE`, `PASSWORD_RESET_REQUEST`, `PASSWORD_RESET_ADMIN`,
+`PIN_ATTEMPT`, `LOGIN`, `LOGOUT`, `EMAIL_VERIFY_REQUEST`, `EMAIL_VERIFIED`, `REGISTER_USER`, `THROTTLED`, `PASSWORD_CHANGE`, `PASSWORD_RESET_REQUEST`, `PASSWORD_RESET_ADMIN`,
 `UPLOAD_DOCUMENT`, `VIEW_DOCUMENT`, `DOWNLOAD_DOCUMENT`, `EDIT_DOCUMENT`, `DELETE_DOCUMENT`, `GRANT_ACCESS`, `REVOKE_ACCESS`,
 `CHANGE_ROLE`, `CHANGE_CATEGORY`, `CHANGE_EMAIL`, `DEACTIVATE_USER`, `ACTIVATE_USER`, `CREATE_CATEGORY`, `FILE_VALIDATION`, `ACCESS_DENIED`, `CSRF_FAILURE`, `AUDIT_INTEGRITY_CHECK`.
 Each row has result `SUCCESS`/`DENIED`/`FAILURE`, IP address, and a hash chained to the previous row. PINs and passwords are never stored in it.

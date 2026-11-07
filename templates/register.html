@@ -6,30 +6,15 @@
   <div class="tv-card auth-card">
     <div class="auth-icon">{{ icon('key', 26) }}</div>
     <h1 class="h3 mb-1">Create your <span class="accent-text">account</span></h1>
-    <p class="text-muted mb-4">New accounts start as Viewers. An administrator can change your role.</p>
+    <p class="text-muted mb-4">Step 1 of 2: enter your email. We send you a link to confirm it, then you choose your username and password. New accounts start as Viewers.</p>
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="mb-3">
+      <div class="mb-4">
         <label class="form-label" for="email">Email</label>
         <input class="form-control" id="email" name="email" type="email" required maxlength="254" autofocus autocomplete="email" placeholder="you@example.com">
-        <div class="form-text">You will sign in with this email.</div>
+        <div class="form-text">Use an address you can open right now. You will sign in with it.</div>
       </div>
-      <div class="mb-3">
-        <label class="form-label" for="username">Display name</label>
-        <input class="form-control" id="username" name="username" required minlength="3" maxlength="30"
-               pattern="[A-Za-z0-9_.\-]+" autocomplete="nickname">
-        <div class="form-text">3-30 characters: letters, numbers, . _ -</div>
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="password">Password</label>
-        <input class="form-control" id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
-        <div class="form-text">At least 10 characters with a letter and a number. Avoid common passwords and your username.</div>
-      </div>
-      <div class="mb-4">
-        <label class="form-label" for="confirm">Confirm password</label>
-        <input class="form-control" id="confirm" name="confirm" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
-      </div>
-      <button class="btn btn-tv w-100" type="submit">Create account</button>
+      <button class="btn btn-tv w-100" type="submit">Send verification link</button>
     </form>
     <p class="small text-muted mt-4 mb-0 text-center">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
   </div>

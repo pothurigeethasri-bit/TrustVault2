@@ -14,13 +14,14 @@
       <div class="mb-3">
         <label class="form-label" for="email">Email address</label>
         <input class="form-control" id="email" name="email" type="email" required maxlength="254" autofocus autocomplete="email">
+        <div class="form-text">We send a confirmation link to this address. Your sign-in email changes only after you open it.</div>
       </div>
       <div class="mb-4">
         <label class="form-label" for="current">Current password</label>
         <input class="form-control" id="current" name="current" type="password" required autocomplete="current-password">
         <div class="form-text">We ask for your password because your email is your login name.</div>
       </div>
-      <button class="btn btn-tv w-100" type="submit">Save email</button>
+      <button class="btn btn-tv w-100" type="submit">Send confirmation link</button>
     </form>
     <p class="small text-muted mt-4 mb-0 text-center"><a href="{{ url_for('dashboard') }}">Back to my documents</a></p>
   </div>

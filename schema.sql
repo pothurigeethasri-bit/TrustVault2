@@ -64,3 +64,23 @@ ALTER TABLE permissions DROP CONSTRAINT IF EXISTS permissions_access_level_check
 UPDATE permissions SET access_level = 'download' WHERE access_level = 'read';
 ALTER TABLE permissions ADD CONSTRAINT permissions_access_level_check
     CHECK (access_level IN ('view','download','edit'));
+
+-- E-mail verification (idempotent). A user row only exists once its address has been proven;
+-- email_verified_at records when. Pre-existing addresses are marked verified once (they were
+-- created before verification existed and are all demo / admin-seeded accounts).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+UPDATE users SET email_verified_at = created_at WHERE email IS NOT NULL AND email_verified_at IS NULL;
+
+-- One-time links e-mailed to prove ownership of an address. Only the SHA-256 hash of the token
+-- is stored. purpose 'register' = new sign-up (no user yet); 'change_email' = existing user.
+CREATE TABLE IF NOT EXISTS email_tokens (
+    id         SERIAL PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    purpose    TEXT NOT NULL CHECK (purpose IN ('register','change_email')),
+    email      TEXT NOT NULL,
+    user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_lookup ON email_tokens (email, purpose, created_at);

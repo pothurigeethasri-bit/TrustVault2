@@ -1,4 +1,4 @@
-# Render Blueprint: New + > Blueprint, pick this repo. You only have to type SEED_PASSWORD and ACCESS_PIN.
+# Render Blueprint: New + > Blueprint, pick this repo. You type SEED_PASSWORD, ACCESS_PIN and the SMTP_* / APP_BASE_URL values.
 databases:
   - name: trustvault-db
     plan: free
@@ -26,6 +26,21 @@ services:
       - key: SEED_PASSWORD          # password for the demo accounts; set it in the dashboard
         sync: false
       - key: ACCESS_PIN             # security PIN every visitor must enter before login/register
+        sync: false
+      # E-mail verification: production refuses to start without these (see .env.example).
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURITY
+        value: starttls
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: APP_BASE_URL           # e.g. https://trustvault.onrender.com (no trailing slash)
         sync: false
       - key: STORAGE_BACKEND        # Render's disk is wiped on every deploy, so keep files in Postgres
         value: db

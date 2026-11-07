@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Confirm email - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="tv-card auth-card">
+    <div class="auth-icon">{{ icon('key', 26) }}</div>
+    <h1 class="h3 mb-1">Confirm your new <span class="accent-text">email</span></h1>
+    <p class="text-muted mb-4">Your sign-in email will change to <strong>{{ new_email }}</strong>.</p>
+    <form method="post" action="{{ url_for('auth.confirm_email') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="btn btn-tv w-100" type="submit">Confirm change</button>
+    </form>
+    <p class="small text-muted mt-4 mb-0 text-center"><a href="{{ url_for('dashboard') }}">Cancel</a></p>
+  </div>
+</div>
+{% endblock %}

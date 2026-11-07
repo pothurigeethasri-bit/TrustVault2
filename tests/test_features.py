@@ -54,33 +54,39 @@ def test_lockout_is_shared_between_email_and_username(make_user, browser):
     assert browser().post("/login", {"email": user["email"], "password": PASSWORD}).status_code == 429
 
 
-def test_register_requires_a_valid_unique_email(browser, make_user):
-    taken = make_user("viewer")
+def test_register_requires_a_valid_email(browser, mailbox):
     b = browser()
-    base = {"password": PASSWORD, "confirm": PASSWORD}
-    assert b.post("/register", {**base, "username": "okname1", "email": "not-an-email"}).status_code == 400
-    assert b.post("/register", {**base, "username": "okname2", "email": ""}).status_code == 400
-    dup = b.post("/register", {**base, "username": "okname3", "email": taken["email"].upper()})
-    assert dup.status_code == 400 and b"already registered" in dup.data
-    ok = b.post("/register", {**base, "username": "okname4", "email": "New.Person@Example.com"})
-    assert ok.status_code == 302
-    row = database.fetch_one("SELECT email, role FROM users WHERE username = 'okname4'")
-    assert row["email"] == "new.person@example.com" and row["role"] == "viewer"
+    assert b.post("/register", {"email": "not-an-email"}).status_code == 400
+    assert b.post("/register", {"email": ""}).status_code == 400
+    assert not mailbox.sent                                   # nothing is mailed for bad input
+    ok = b.post("/register", {"email": "New.Person@Example.com"})
+    assert ok.status_code == 200
+    assert mailbox.to("new.person@example.com")               # normalised to lower-case
 
 
-def test_existing_user_can_add_an_email_with_their_password(browser):
+def test_existing_user_can_add_an_email_after_confirming_it(browser, mailbox):
     name = "legacy" + __import__("os").urandom(3).hex()
     uid = auth.create_user(name, PASSWORD, "viewer")          # old account: no email
     b = browser({"id": uid, "username": name, "role": "viewer"})
-    assert b.post("/account/email", {"email": f"{name}@example.com", "current": "wrong"}).status_code == 401
-    assert b.post("/account/email", {"email": f"{name}@example.com", "current": PASSWORD}).status_code == 302
-    assert browser().post("/login", {"email": f"{name}@example.com", "password": PASSWORD}).status_code == 302
+    new = f"{name}@example.com"
+    assert b.post("/account/email", {"email": new, "current": "wrong"}).status_code == 401
+    assert not mailbox.sent
+    assert b.post("/account/email", {"email": new, "current": PASSWORD}).status_code == 302
+    token = mailbox.token_for(new)
+    assert token
+    # Not usable until the link is opened and confirmed.
+    assert database.fetch_one("SELECT email FROM users WHERE id = %s", (uid,))["email"] is None
+    assert browser().post("/login", {"email": new, "password": PASSWORD}).status_code == 401
+    assert b.get(f"/account/email/confirm?token={token}").status_code == 200
+    assert b.post("/account/email/confirm", {"token": token}).status_code == 302
+    assert browser().post("/login", {"email": new, "password": PASSWORD}).status_code == 302
 
 
-def test_email_cannot_be_taken_from_someone_else(make_user, browser):
+def test_email_cannot_be_taken_from_someone_else(make_user, browser, mailbox):
     a, other = make_user("viewer"), make_user("viewer")
     r = browser(a).post("/account/email", {"email": other["email"], "current": PASSWORD})
     assert r.status_code == 400 and b"already registered" in r.data
+    assert not mailbox.sent
 
 
 # -------------------------------------------- view / download / edit are separate

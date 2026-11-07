@@ -21,7 +21,7 @@ import psycopg2
 from psycopg2 import sql
 from urllib.parse import quote, urlsplit, urlunsplit
 
-APP_TABLES = ("users", "categories", "documents", "permissions", "file_blobs")
+APP_TABLES = ("users", "categories", "documents", "permissions", "file_blobs", "email_tokens")
 
 
 def apply_grants(cur, role):

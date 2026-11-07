@@ -41,10 +41,9 @@ def test_failed_login_and_failed_registration_are_recorded(make_user, browser, e
     user = make_user("viewer")
     b = browser()
     b.login(user["username"], "wrong-password-1")
-    b.post("/register", {"username": user["username"], "email": f"{user['username']}@example.com",
-                         "password": PASSWORD, "confirm": PASSWORD})
-    got = rows_for(events, user["username"])
-    assert ("LOGIN", "FAILURE") in got and ("REGISTER_USER", "FAILURE") in got
+    b.post("/register", {"email": "not-an-email"})
+    assert ("LOGIN", "FAILURE") in rows_for(events, user["username"])
+    assert ("REGISTER_USER", "FAILURE") in rows_for(events, "not-an-email")
 
 
 def test_document_history_is_shown_to_the_owner_only(make_user, browser, upload_doc):

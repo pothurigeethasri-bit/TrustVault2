@@ -282,12 +282,14 @@ def test_unknown_user_and_bad_password_give_the_same_response(make_user, browser
     assert events(username="nobody-" + user["username"], action="LOGIN")      # failed attempt still recorded
 
 
-def test_registration_always_creates_a_viewer(browser):
+def test_registration_always_creates_a_viewer(browser, mailbox):
     b = browser()
     name = "newbie" + os.urandom(3).hex()
-    r = b.post("/register", {"username": name, "email": f"{name}@example.com",
-                             "password": PASSWORD, "confirm": PASSWORD,
-                             "role": "admin", "is_admin": "1"})
+    email = f"{name}@example.com"
+    b.post("/register", {"email": email, "role": "admin"})
+    r = b.post("/register/complete", {"token": mailbox.token_for(email), "username": name,
+                                      "password": PASSWORD, "confirm": PASSWORD,
+                                      "role": "admin", "is_admin": "1"})
     assert r.status_code == 302
     assert database.fetch_one("SELECT role FROM users WHERE username = %s", (name,))["role"] == "viewer"
 

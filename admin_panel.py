@@ -25,6 +25,7 @@ ALL_ACTIONS = (
     audit.CSRF_FAILURE, audit.INTEGRITY_CHECK, audit.PIN_ATTEMPT,
     audit.PASSWORD_CHANGE, audit.PASSWORD_RESET_ADMIN, audit.PASSWORD_RESET_REQUEST,
     audit.THROTTLED, audit.CATEGORY_CHANGE, audit.EMAIL_CHANGE,
+    audit.EMAIL_VERIFY_REQUEST, audit.EMAIL_VERIFIED,
 )
 
 # Alert thresholds (tunable in .env). Alerts are computed from the append-only audit log, so

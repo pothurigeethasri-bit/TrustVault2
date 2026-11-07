@@ -25,9 +25,10 @@ def seed():
                 # Existing demo accounts keep their password; they just gain an email if
                 # they did not have one, so they can sign in with it.
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, role, email) "
-                    "VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO UPDATE "
-                    "SET email = COALESCE(users.email, EXCLUDED.email)",
+                    "INSERT INTO users (username, password_hash, role, email, email_verified_at) "
+                    "VALUES (%s, %s, %s, %s, now()) ON CONFLICT (username) DO UPDATE "
+                    "SET email = COALESCE(users.email, EXCLUDED.email), "
+                    "email_verified_at = COALESCE(users.email_verified_at, EXCLUDED.email_verified_at)",
                     (username, generate_password_hash(password), role, email),
                 )
     finally:

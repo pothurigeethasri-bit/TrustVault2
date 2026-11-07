@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Finish sign-up - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="tv-card auth-card">
+    <div class="auth-icon">{{ icon('key', 26) }}</div>
+    <h1 class="h3 mb-1">Email <span class="accent-text">verified</span></h1>
+    <p class="text-muted mb-4">Step 2 of 2: choose your username and password. Your account is created when you submit this form.</p>
+    <form method="post" action="{{ url_for('auth.register_complete') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <div class="mb-3">
+        <label class="form-label" for="verified-email">Email</label>
+        <input class="form-control" id="verified-email" type="email" value="{{ email }}" readonly disabled>
+        <div class="form-text">Confirmed. You will sign in with this email.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="username">Username</label>
+        <input class="form-control" id="username" name="username" required minlength="3" maxlength="30"
+               pattern="[A-Za-z0-9_.\-]+" autocomplete="username" autofocus value="{{ username }}">
+        <div class="form-text">3-30 characters: letters, numbers, . _ -</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="password">Password</label>
+        <input class="form-control" id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+        <div class="form-text">At least 10 characters with a letter and a number. Avoid common passwords and your username.</div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label" for="confirm">Confirm password</label>
+        <input class="form-control" id="confirm" name="confirm" type="password" required minlength="10" maxlength="128" autocomplete="new-password">
+      </div>
+      <button class="btn btn-tv w-100" type="submit">Create account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

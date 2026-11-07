@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Check your email - TrustVault{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="tv-card auth-card">
+    <div class="auth-icon">{{ icon('key', 26) }}</div>
+    <h1 class="h3 mb-1">Check your <span class="accent-text">email</span></h1>
+    <p class="text-muted mb-3">If <strong>{{ email }}</strong> can receive mail, a verification link is on its way. Open it to choose your username and password.</p>
+    <ul class="small text-muted mb-4">
+      <li>The link works once and expires in {{ minutes }} minutes.</li>
+      <li>Nothing is created until you open it. Look in your spam folder too.</li>
+      <li>Wrong address? Go back and enter the right one.</li>
+    </ul>
+    <form method="post" action="{{ url_for('auth.register') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="email" value="{{ email }}">
+      <button class="btn btn-ghost w-100" type="submit">Send the link again</button>
+      <div class="form-text text-center mt-2">You can ask for a new link once every {{ cooldown }} seconds. The newest link replaces older ones.</div>
+    </form>
+    <p class="small text-muted mt-4 mb-0 text-center"><a href="{{ url_for('auth.register') }}">Use a different email</a> &middot; <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+  </div>
+</div>
+{% endblock %}

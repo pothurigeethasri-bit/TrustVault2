@@ -28,19 +28,16 @@ def test_username_lockout_still_applies_when_attempts_come_from_many_ips(make_us
     assert browser().login(victim["username"], PASSWORD).status_code == 429
 
 
-def test_registration_is_limited_per_ip(browser):
+def test_sign_up_emails_are_limited_per_ip(browser, mailbox):
     b = browser()
     for _ in range(auth.MAX_REGISTRATIONS_PER_IP):
         name = "new" + os.urandom(4).hex()
-        assert b.post("/register", {"username": name, "email": f"{name}@example.com",
-                                    "password": PASSWORD, "confirm": PASSWORD}).status_code == 302
+        assert b.post("/register", {"email": f"{name}@example.com"}).status_code == 200
     extra = "new" + os.urandom(4).hex()
-    r = b.post("/register", {"username": extra, "email": f"{extra}@example.com",
-                             "password": PASSWORD, "confirm": PASSWORD})
-    assert r.status_code == 429
+    assert b.post("/register", {"email": f"{extra}@example.com"}).status_code == 429
+    assert not mailbox.to(f"{extra}@example.com")
     other = "new" + os.urandom(4).hex()
-    assert browser().post("/register", {"username": other, "email": f"{other}@example.com",
-                                        "password": PASSWORD, "confirm": PASSWORD}).status_code == 302
+    assert browser().post("/register", {"email": f"{other}@example.com"}).status_code == 200
 
 
 def test_password_reset_requests_are_limited_per_ip(make_user, browser):

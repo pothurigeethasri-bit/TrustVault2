@@ -5,13 +5,15 @@ import secrets
 import string
 from functools import wraps
 
-from flask import (Blueprint, abort, flash, g, redirect, render_template,
+from flask import (Blueprint, abort, flash, g, make_response, redirect, render_template,
                    request, session, url_for)
 from psycopg2 import errors as pg_errors
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import audit
+import mailer
 import pin_gate
+import verification
 from database import execute, execute_returning, get_connection
 from passwords import validate_password
 from validation import normalise_email
@@ -65,14 +67,18 @@ def get_user_by_id(user_id):
 
 
 def create_user(username, password, role="viewer", email=None):
-    """Returns the new user id, or None if the username (or e-mail) is already taken."""
+    """Insert an account directly. ONLY for trusted callers (seed script, tests): an e-mail
+    given here is recorded as verified. Self sign-up never calls this; it goes through
+    verification.complete_registration() so the address is proven first.
+    Returns the new user id, or None if the username (or e-mail) is already taken."""
     conn = get_connection()
     try:
         with conn, conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (username, password_hash, role, email) "
-                "VALUES (%s, %s, %s, %s) RETURNING id",
-                (username, generate_password_hash(password), role, email))
+                "INSERT INTO users (username, password_hash, role, email, email_verified_at) "
+                "VALUES (%s, %s, %s, %s, CASE WHEN %s IS NULL THEN NULL ELSE now() END) "
+                "RETURNING id",
+                (username, generate_password_hash(password), role, email, email))
             return cur.fetchone()[0]
     except pg_errors.UniqueViolation:
         return None
@@ -231,52 +237,133 @@ def login():
     return render_template("login.html"), 401
 
 
+def _verification_link(endpoint, token):
+    return f"{mailer.base_url(request)}{url_for(endpoint)}?token={token}"
+
+
+def _mail_failure_message(exc):
+    if exc.rejected:
+        return "That email address was rejected by the mail server. Check it for typos."
+    return "We could not send the email right now. Please try again in a few minutes."
+
+
+def _no_store(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
+    """Step 1 of sign-up: ONLY an e-mail address. A link is mailed to it; the username and
+    password are chosen after the link is opened (register_complete). No account exists, and
+    no username is reserved, until then. The answer is the same whether or not the address
+    already has an account, so the form cannot be used to find out who is registered."""
     if g.user:
         return redirect(url_for("dashboard"))
     if request.method == "GET":
         return render_template("register.html")
 
-    username = request.form.get("username", "").strip().lower()
     raw_email = request.form.get("email", "")
     email = normalise_email(raw_email)
-    password = request.form.get("password", "")
-    confirm = request.form.get("confirm", "")
     ip = audit.client_ip(request)
 
-    if _throttled(audit.REGISTER, ip, 60, MAX_REGISTRATIONS_PER_IP,
-                  results=("SUCCESS", "FAILURE"), what=" (register)"):
+    if _throttled(audit.EMAIL_VERIFY_REQUEST, ip, 60, MAX_REGISTRATIONS_PER_IP,
+                  results=("SUCCESS", "FAILURE"), what=" (sign-up email)"):
         flash("Too many sign-up attempts from your network. Try again later.", "danger")
         return render_template("register.html"), 429
 
+    if email is None:     # typos are not counted against the per-IP limit: nothing is sent
+        audit.log_event(audit.REGISTER, audit.FAILURE, username=raw_email.strip()[:150],
+                        ip_address=ip, details="invalid email address")
+        flash("Enter a valid email address.", "danger")
+        return render_template("register.html"), 400
+
+    try:
+        if get_user_by_email(email):
+            verification.send_already_registered_notice(
+                email, f"{mailer.base_url(request)}{url_for('auth.login')}")
+            result, details = audit.SUCCESS, "address already registered: notice sent"
+        elif verification.may_send_link(email, verification.REGISTER):
+            token = verification.create_token(email, verification.REGISTER)
+            try:
+                verification.send_registration_link(
+                    email, _verification_link("auth.register_complete", token))
+            except mailer.MailError:
+                verification.discard_token(token)       # let them retry at once
+                raise
+            result, details = audit.SUCCESS, "verification link sent"
+        else:
+            result, details = audit.DENIED, "not sent: per-address limit (cooldown or hourly cap)"
+    except mailer.MailError as exc:
+        audit.log_event(audit.EMAIL_VERIFY_REQUEST, audit.FAILURE, username=email,
+                        ip_address=ip,
+                        details="mail server refused the address" if exc.rejected else "send failed")
+        flash(_mail_failure_message(exc), "danger")
+        return render_template("register.html"), (400 if exc.rejected else 503)
+
+    audit.log_event(audit.EMAIL_VERIFY_REQUEST, result, username=email, ip_address=ip,
+                    details=details)
+    return render_template("register_sent.html", email=email,
+                           minutes=verification.TOKEN_MINUTES,
+                           cooldown=verification.RESEND_COOLDOWN_SECONDS)
+
+
+@auth_bp.route("/register/complete", methods=["GET", "POST"])
+def register_complete():
+    """Step 2: the e-mailed link. Opening it only shows the form (so link-scanners cannot use
+    it up); submitting the form redeems it and creates the account in one transaction."""
+    if g.user:
+        return redirect(url_for("dashboard"))
+    is_post = request.method == "POST"
+    token = ((request.form if is_post else request.args).get("token") or "").strip()
+    ip = audit.client_ip(request)
+
+    def dead_link(message="This link is invalid, has expired or was already used."):
+        return _no_store(make_response(render_template("verify_failed.html", message=message), 400))
+
+    def form(error=None, status=200, email=None, username=""):
+        if error:
+            flash(error, "danger")
+        return _no_store(make_response(render_template(
+            "register_complete.html", token=token, email=email, username=username), status))
+
+    pending = verification.lookup(token, verification.REGISTER)
+    if pending is None:
+        return dead_link()
+    if not is_post:
+        return form(email=pending["email"])
+
+    username = request.form.get("username", "").strip().lower()
+    password = request.form.get("password", "")
+    confirm = request.form.get("confirm", "")
+
     error = None
-    if email is None:
-        error = "Enter a valid email address."
-    elif not USERNAME_RE.match(username):
+    if not USERNAME_RE.match(username):
         error = "Username must be 3-30 characters: letters, numbers, . _ -"
     elif password != confirm:
         error = "Passwords do not match."
-    elif get_user_by_email(email):
-        error = "That email is already registered."
     else:
         error = validate_password(password, username)
-
-    # Self-registration ALWAYS creates a viewer. Roles are changed by admins only.
-    new_id = None if error else create_user(username, password, "viewer", email)
-    if not error and new_id is None:      # lost a race with another sign-up
-        error = ("That email is already registered." if get_user_by_email(email)
-                 else "That username is already taken.")
-
     if error:
         audit.log_event(audit.REGISTER, audit.FAILURE, username=username[:150],
                         ip_address=ip, details=error)
-        flash(error, "danger")
-        return render_template("register.html"), 400
+        return form(error, 400, pending["email"], username)
 
-    audit.log_event(audit.REGISTER, audit.SUCCESS,
-                    user={"id": new_id, "username": username}, ip_address=ip)
-    flash("Account created. Please sign in.", "success")
+    outcome, new_id, email = verification.complete_registration(token, username, password)
+    if outcome == verification.USERNAME_TAKEN:        # link NOT used up: pick another name
+        audit.log_event(audit.REGISTER, audit.FAILURE, username=username[:150],
+                        ip_address=ip, details="username already taken")
+        return form("That username is already taken. Choose another.", 400, pending["email"])
+    if outcome == verification.EMAIL_TAKEN:
+        return dead_link("An account with this email already exists. Please sign in.")
+    if outcome != verification.OK:
+        return dead_link()
+
+    new_user = {"id": new_id, "username": username}
+    audit.log_event(audit.EMAIL_VERIFIED, audit.SUCCESS, user=new_user, target_user_id=new_id,
+                    ip_address=ip, details=f"sign-up email {email} verified")
+    audit.log_event(audit.REGISTER, audit.SUCCESS, user=new_user, ip_address=ip)
+    flash("Email verified and account created. Please sign in.", "success")
     return redirect(url_for("auth.login"))
 
 
@@ -368,8 +455,9 @@ def forgot_password():
 @auth_bp.route("/account/email", methods=["GET", "POST"])
 @login_required
 def change_email():
-    """Set or change the e-mail used to sign in. Needs the current password, because an
-    e-mail address is a login name."""
+    """Set or change the e-mail used to sign in. Needs the current password (an e-mail
+    address is a login name) AND proof that the new address is the user's: the address only
+    changes after the link mailed to it is opened (confirm_email)."""
     if request.method == "GET":
         return render_template("change_email.html")
 
@@ -394,15 +482,64 @@ def change_email():
     email = normalise_email(request.form.get("email", ""))
     if email is None:
         return refuse("Enter a valid email address.")
+    if email == me["email"]:
+        return refuse("That is already your sign-in email.")
     owner = get_user_by_email(email)
     if owner and owner["id"] != me["id"]:
         return refuse("That email is already registered.")
+    if not verification.may_send_link(email, verification.CHANGE_EMAIL):
+        flash(f"A link was sent to that address a moment ago. Check your inbox (and spam), or "
+              f"wait about {verification.RESEND_COOLDOWN_SECONDS} seconds and try again.", "info")
+        return render_template("change_email.html"), 429
 
+    token = verification.create_token(email, verification.CHANGE_EMAIL, me["id"])
     try:
-        execute("UPDATE users SET email = %s WHERE id = %s", (email, me["id"]))
-    except pg_errors.UniqueViolation:
-        return refuse("That email is already registered.")
+        verification.send_change_email_link(
+            email, _verification_link("auth.confirm_email", token), me["username"])
+    except mailer.MailError as exc:
+        verification.discard_token(token)
+        return refuse(_mail_failure_message(exc), 400 if exc.rejected else 503,
+                      "mail server refused the address" if exc.rejected else "send failed")
+
+    audit.log_event(audit.EMAIL_VERIFY_REQUEST, audit.SUCCESS, user=me, target_user_id=me["id"],
+                    ip_address=ip, details=f"link sent to {email} for email change")
+    flash(f"We sent a confirmation link to {email}. Your sign-in email changes only after you "
+          f"open it.", "success")
+    return redirect(url_for("auth.change_email"))
+
+
+@auth_bp.route("/account/email/confirm", methods=["GET", "POST"])
+def confirm_email():
+    """The link mailed by change_email. Must be opened while signed in as the same user."""
+    if g.user is None:
+        flash("Sign in first, then open the link from your email again.", "info")
+        return redirect(url_for("auth.login"))
+    me = g.user
+    is_post = request.method == "POST"
+    token = ((request.form if is_post else request.args).get("token") or "").strip()
+    ip = audit.client_ip(request)
+
+    pending = verification.lookup(token, verification.CHANGE_EMAIL, user_id=me["id"])
+    if pending is None:
+        flash("This link is invalid, has expired, was already used, or belongs to another "
+              "account. Request a new one below.", "danger")
+        return redirect(url_for("auth.change_email"))
+    if not is_post:
+        return _no_store(make_response(render_template(
+            "confirm_email.html", token=token, new_email=pending["email"])))
+
+    outcome, new_email = verification.confirm_email_change(token, me["id"])
+    if outcome == verification.EMAIL_TAKEN:
+        audit.log_event(audit.EMAIL_CHANGE, audit.FAILURE, user=me, target_user_id=me["id"],
+                        ip_address=ip, details="address taken by another account")
+        flash("That email is now registered to another account.", "danger")
+        return redirect(url_for("auth.change_email"))
+    if outcome != verification.OK:
+        flash("This link is invalid, has expired or was already used.", "danger")
+        return redirect(url_for("auth.change_email"))
+    audit.log_event(audit.EMAIL_VERIFIED, audit.SUCCESS, user=me, target_user_id=me["id"],
+                    ip_address=ip, details=f"{new_email} verified")
     audit.log_event(audit.EMAIL_CHANGE, audit.SUCCESS, user=me, target_user_id=me["id"],
-                    ip_address=ip, details=f"email set to {email}")
-    flash("Email saved. You can now sign in with it.", "success")
+                    ip_address=ip, details=f"email set to {new_email}")
+    flash("Email confirmed. You can now sign in with it.", "success")
     return redirect(url_for("dashboard"))
